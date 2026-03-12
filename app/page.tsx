@@ -15,8 +15,11 @@ export default function SeatMapSystem() {
   const [appTitle, setAppTitle] = useState("사무실 좌석 배치도");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminPassword, setAdminPassword] = useState("1234");
-  const [modalType, setModalType] = useState<"login" | "changePw" | "error" | null>(null);
+
+  // 모달 상태 확장 (login, changePw, alert, confirm)
+  const [modalType, setModalType] = useState<"login" | "changePw" | "alert" | "confirm" | null>(null);
   const [modalInput, setModalInput] = useState("");
+  const [modalMsg, setModalMsg] = useState(""); // 모달에 띄울 메시지
   
   const [floors, setFloors] = useState<FloorInfo[]>([{ id: "F1", displayName: "1층", items: [] }]);
   const [activeFloorId, setActiveFloorId] = useState<string>("F1");
@@ -30,27 +33,31 @@ export default function SeatMapSystem() {
 
   useEffect(() => { setHasMounted(true); }, []);
 
-  // 삭제 로직 안정화
-  const deleteSelectedItems = () => {
+  // 커스텀 삭제 확인 모달 띄우기
+  const requestDelete = () => {
     if (selectedIds.length === 0) return;
-    if (window.confirm(`선택한 ${selectedIds.length}개 항목을 삭제하시겠습니까?`)) {
-      const currentFloorItems = currentItems.filter(i => !selectedIds.includes(i.id));
-      updateItems(currentFloorItems);
-      setSelectedIds([]);
-    }
+    setModalMsg(`선택한 ${selectedIds.length}개 항목을 삭제하시겠습니까?`);
+    setModalType("confirm");
+  };
+
+  // 실제 삭제 수행
+  const confirmDelete = () => {
+    updateItems(currentItems.filter(i => !selectedIds.includes(i.id)));
+    setSelectedIds([]);
+    setModalType(null);
   };
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isAdmin || selectedIds.length === 0) return;
+      if (!isAdmin || selectedIds.length === 0 || modalType !== null) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Delete" || e.key === "Backspace") {
-        deleteSelectedItems();
+        requestDelete();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isAdmin, selectedIds, activeFloorId, floors]);
+  }, [isAdmin, selectedIds, modalType, currentItems]);
 
   const currentFloor = useMemo(() => floors.find(f => f.id === activeFloorId) || floors[0], [floors, activeFloorId]);
   const currentItems = currentFloor.items;
@@ -71,10 +78,14 @@ export default function SeatMapSystem() {
   const handleModalConfirm = () => {
     if (modalType === "login") {
       if (modalInput === adminPassword) { setIsAdmin(true); setModalType(null); setModalInput(""); }
-      else { setModalType("error"); setModalInput(""); }
+      else { setModalMsg("비밀번호가 틀렸습니다."); setModalType("alert"); setModalInput(""); }
     } else if (modalType === "changePw") {
-      if (modalInput.trim()) { setAdminPassword(modalInput); setModalType(null); setModalInput(""); alert("비밀번호 변경 완료"); }
-    } else if (modalType === "error") { setModalType("login"); }
+      if (modalInput.trim()) { setAdminPassword(modalInput); setModalMsg("비밀번호가 변경되었습니다."); setModalType("alert"); setModalInput(""); }
+    } else if (modalType === "alert") {
+      setModalType(null);
+    } else if (modalType === "confirm") {
+      confirmDelete();
+    }
   };
 
   const onCanvasMouseDown = (e: React.MouseEvent) => {
@@ -134,25 +145,33 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
+      {/* 커스텀 통합 모달 시스템 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
             <h3 style={{ marginBottom: "20px", fontSize: "16px", fontWeight: "bold", color: "#1e293b" }}>
-              {modalType === "login" ? "관리자 인증" : "비밀번호 설정"}
+              {modalType === "login" ? "관리자 인증" : modalType === "changePw" ? "비밀번호 설정" : "알림"}
             </h3>
             <div style={{ padding: "0 25px" }}>
-              <input 
-                type="password" 
-                value={modalInput} 
-                onChange={(e) => setModalInput(e.target.value)} 
-                onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} 
-                style={modalInputS} 
-                placeholder="비밀번호"
-                autoFocus 
-              />
-              <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
+              {(modalType === "login" || modalType === "changePw") && (
+                <input 
+                  type="password" 
+                  value={modalInput} 
+                  onChange={(e) => setModalInput(e.target.value)} 
+                  onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} 
+                  style={modalInputS} 
+                  placeholder="비밀번호"
+                  autoFocus 
+                />
+              )}
+              {(modalType === "alert" || modalType === "confirm") && (
+                <p style={{ fontSize: "14px", color: "#475569", lineHeight: "1.5", marginBottom: "5px" }}>{modalMsg}</p>
+              )}
+              <div style={{ display: "flex", gap: "10px", marginTop: "25px" }}>
                 <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인</button>
-                <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
+                {(modalType === "login" || modalType === "changePw" || modalType === "confirm") && (
+                  <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
+                )}
               </div>
             </div>
           </div>
@@ -251,7 +270,7 @@ export default function SeatMapSystem() {
               </div>
               <div style={{marginTop: "10px"}}>
                 <p style={{fontSize: "11px", color: "#94a3b8", textAlign: "center", marginBottom: "5px"}}>💡 키보드 Del키로 삭제 가능</p>
-                <button onClick={deleteSelectedItems} style={deleteBtnS}>항목 삭제</button>
+                <button onClick={requestDelete} style={deleteBtnS}>항목 삭제</button>
               </div>
             </div>
           ) : <div style={{ textAlign: "center", color: "#94a3b8", marginTop: "50px" }}>아이템을 드래그하여<br/>선택해 보세요.</div>}
@@ -308,8 +327,8 @@ const statsCardS: any = { padding: "12px", backgroundColor: "#f8fafc", borderRad
 const groupRowS: any = { display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer" };
 const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px", marginTop: "8px" };
 const paletteItemS: any = { height: "20px", borderRadius: "4px", cursor: "pointer" };
-const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000 };
-const modalContentS: any = { backgroundColor: "#fff", padding: "30px 0", borderRadius: "20px", width: "320px", textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)", boxSizing: "border-box" };
+const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000 };
+const modalContentS: any = { backgroundColor: "#fff", padding: "30px 0", borderRadius: "20px", width: "320px", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.25)", boxSizing: "border-box" };
 const modalInputS: any = { width: "100%", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "10px", fontSize: "14px", outline: "none", textAlign: "center", boxSizing: "border-box" };
 const subBtnS: any = { padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer", width: "100%", fontWeight: "bold" };
 const gridOverlayS: any = { position: "absolute", inset: 0, backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "20px 20px", pointerEvents: "none" };
