@@ -127,11 +127,15 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
+      {/* 비밀번호 모달 레이아웃 전면 수정 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
-            <h3 style={{ marginBottom: "15px", fontSize: "15px" }}>{modalType === "login" ? "관리자 인증" : "비밀번호 설정"}</h3>
-            <div style={{ width: "100%", padding: "0 20px", boxSizing: "border-box" }}>
+            <h3 style={{ marginBottom: "20px", fontSize: "16px", fontWeight: "bold" }}>
+              {modalType === "login" ? "관리자 인증" : "비밀번호 설정"}
+            </h3>
+            {/* 내부 정렬용 컨테이너 추가 */}
+            <div style={{ padding: "0 25px" }}>
               <input 
                 type="password" 
                 value={modalInput} 
@@ -141,7 +145,7 @@ export default function SeatMapSystem() {
                 placeholder="비밀번호"
                 autoFocus 
               />
-              <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+              <div style={{ display: "flex", gap: "10px", marginTop: "20px" }}>
                 <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인</button>
                 <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
               </div>
@@ -282,28 +286,29 @@ function DraggableComponent({ item, isSelected, isAdmin, onSelect, onDrag }: any
   );
 }
 
+// 스타일 시트 (모달 및 박스 사이징 수정)
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f8fafc", fontFamily: "sans-serif", fontSize: "13px" };
 const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px 20px", display: "flex", flexDirection: "column" };
 const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", overflowY: "auto" };
 const canvasS: any = { width: "100%", height: "100%", backgroundColor: "#fff", borderRadius: "15px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden", cursor: "crosshair" };
-const inputS: any = { width: "100%", padding: "8px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "12px", outline: "none" };
+const inputS: any = { width: "100%", padding: "8px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "12px", outline: "none", boxSizing: "border-box" };
 const labelS: any = { fontSize: "11px", color: "#94a3b8", fontWeight: "bold", marginBottom: "5px", display: "block" };
 const propCardS: any = { padding: "10px", border: "1px solid #f1f5f9", borderRadius: "8px", marginBottom: "10px" };
 const toolBtn: any = { padding: "8px", border: "1px solid #e2e8f0", borderRadius: "6px", backgroundColor: "#fff", cursor: "pointer", fontSize: "11px", fontWeight: "600" };
 const adminBtnS: any = (adm: boolean) => ({ padding: "10px", backgroundColor: adm ? "#1e293b" : "#2563eb", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", width: "100%", fontWeight: "bold" });
 const actionBtnS: any = (bg: string, co: string) => ({ padding: "10px", backgroundColor: bg, color: co, border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600" });
 const floorBtnS: any = (act: boolean) => ({ padding: "8px", backgroundColor: act ? "#2563eb" : "#f1f5f9", color: act ? "#fff" : "#64748b", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" });
-const floorInputS: any = { padding: "4px", border: "1px solid #e2e8f0", borderRadius: "5px", fontSize: "11px" };
+const floorInputS: any = { padding: "4px", border: "1px solid #e2e8f0", borderRadius: "5px", fontSize: "11px", boxSizing: "border-box" };
 const statsCardS: any = { padding: "12px", backgroundColor: "#f8fafc", borderRadius: "10px", marginBottom: "15px", border: "1px solid #e2e8f0" };
 const groupRowS: any = { display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer" };
 const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px", marginTop: "8px" };
 const paletteItemS: any = { height: "20px", borderRadius: "4px", cursor: "pointer" };
 const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalContentS: any = { backgroundColor: "#fff", padding: "20px 0", borderRadius: "15px", width: "300px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.1)" };
-const modalInputS: any = { width: "100%", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", outline: "none", textAlign: "center" };
+const modalContentS: any = { backgroundColor: "#fff", padding: "30px 0", borderRadius: "20px", width: "320px", textAlign: "center", boxShadow: "0 20px 40px rgba(0,0,0,0.15)" };
+const modalInputS: any = { width: "100%", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "10px", fontSize: "14px", outline: "none", textAlign: "center", boxSizing: "border-box" };
 const subBtnS: any = { padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer", width: "100%", fontWeight: "bold" };
 const gridOverlayS: any = { position: "absolute", inset: 0, backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "20px 20px", pointerEvents: "none" };
-const titleEditS: any = { fontSize: "16px", fontWeight: "bold", padding: "6px", border: "1px solid #2563eb", borderRadius: "8px", marginBottom: "15px", width: "100%", outline: "none" };
+const titleEditS: any = { fontSize: "16px", fontWeight: "bold", padding: "6px", border: "1px solid #2563eb", borderRadius: "8px", marginBottom: "15px", width: "100%", outline: "none", boxSizing: "border-box" };
 const addFloorBtnS: any = { width: "100%", padding: "6px", border: "1px dashed #cbd5e1", background: "none", borderRadius: "8px", color: "#94a3b8", cursor: "pointer", fontSize: "11px", marginTop: "5px" };
 const smallBtnS: any = { padding: "0 10px", backgroundColor: "#f1f5f9", border: "none", borderRadius: "5px", fontSize: "11px", cursor: "pointer" };
 const pwBtnS: any = { padding: "4px", background: "none", border: "1px solid #e2e8f0", borderRadius: "6px", color: "#64748b", fontSize: "10px", cursor: "pointer", marginBottom: "5px", alignSelf: "flex-end" };
