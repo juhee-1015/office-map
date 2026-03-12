@@ -30,7 +30,6 @@ export default function SeatMapSystem() {
 
   useEffect(() => { setHasMounted(true); }, []);
 
-  // 키보드 삭제 기능
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isAdmin || selectedIds.length === 0) return;
@@ -113,17 +112,11 @@ export default function SeatMapSystem() {
     }
   };
 
-  // 회전 기능 핵심 수정
   const rotateItems = (type: "90" | "180") => {
     updateItems(currentItems.map(i => {
       if (selectedIds.includes(i.id)) {
-        if (type === "90") {
-          // 90도는 가로세로 교체 + 각도 90도 증가
-          return { ...i, width: i.height, height: i.width, rotation: (i.rotation + 90) % 360 };
-        } else {
-          // 180도는 각도만 180도 증가
-          return { ...i, rotation: (i.rotation + 180) % 360 };
-        }
+        if (type === "90") return { ...i, width: i.height, height: i.width, rotation: (i.rotation + 90) % 360 };
+        else return { ...i, rotation: (i.rotation + 180) % 360 };
       }
       return i;
     }));
@@ -134,12 +127,23 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
+      {/* 비밀번호/인증 모달 수정 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
-            <h3 style={{ marginBottom: "15px" }}>{modalType === "login" ? "관리자 인증" : "비밀번호 설정"}</h3>
-            <input type="password" value={modalInput} onChange={(e) => setModalInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} style={inputS} autoFocus />
-            <div style={{ display: "flex", gap: "5px", marginTop: "15px" }}>
+            <h3 style={{ marginBottom: "15px", fontSize: "15px" }}>{modalType === "login" ? "관리자 인증" : "비밀번호 설정"}</h3>
+            <div style={{ padding: "0 10px" }}> {/* 좌우 여백 정렬을 위한 컨테이너 */}
+              <input 
+                type="password" 
+                value={modalInput} 
+                onChange={(e) => setModalInput(e.target.value)} 
+                onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} 
+                style={modalInputS} 
+                placeholder="비밀번호 입력"
+                autoFocus 
+              />
+            </div>
+            <div style={{ display: "flex", gap: "8px", marginTop: "20px", padding: "0 10px" }}>
               <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인</button>
               <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
             </div>
@@ -148,19 +152,24 @@ export default function SeatMapSystem() {
       )}
 
       <div style={sidebarS}>
-        {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "20px" }}>{appTitle}</h2>}
+        {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "15px" }}>{appTitle}</h2>}
+        
         {isAdmin && (
           <div style={statsCardS}>
-            <p style={{ fontSize: "11px", color: "#6366f1", marginBottom: "8px", fontWeight: "600" }}>💡 부서 색상 클릭 시 그룹 선택</p>
-            <div style={{ fontWeight: "bold", color: "#2563eb", fontSize: "13px", marginBottom: "8px" }}>총 {stats.total}석</div>
-            {Object.entries(stats.teams).map(([color, count]: any) => (
-              <div key={color} onClick={() => setSelectedIds(currentItems.filter(i => i.color === color).map(i => i.id))} style={groupRowS}>
-                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}><div style={{ width: "10px", height: "10px", backgroundColor: color, borderRadius: "2px" }} /><span>{teamNames[color] || "미지정"}</span></div>
-                <span>{count}명</span>
-              </div>
-            ))}
+            <p style={{ fontSize: "11px", color: "#6366f1", marginBottom: "6px", fontWeight: "600" }}>💡 부서 색상 클릭 시 그룹 선택</p>
+            {/* 총 좌석 수 글자 키움 & 상단 공백 조절 */}
+            <div style={{ fontWeight: "800", color: "#1e293b", fontSize: "17px", marginBottom: "10px", borderBottom: "1px solid #e2e8f0", pb: "5px" }}>총 {stats.total}석</div>
+            <div style={{ maxHeight: "150px", overflowY: "auto" }}>
+              {Object.entries(stats.teams).map(([color, count]: any) => (
+                <div key={color} onClick={() => setSelectedIds(currentItems.filter(i => i.color === color).map(i => i.id))} style={groupRowS}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}><div style={{ width: "10px", height: "10px", backgroundColor: color, borderRadius: "2px" }} /><span>{teamNames[color] || "미지정"}</span></div>
+                  <span style={{ fontWeight: "bold" }}>{count}석</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
+
         <div style={{ marginBottom: "20px" }}>
           <label style={labelS}>층 관리</label>
           {floors.map(f => (
@@ -171,6 +180,7 @@ export default function SeatMapSystem() {
           ))}
           {isAdmin && <button onClick={() => setFloors([...floors, { id: `F${Date.now()}`, displayName: `${floors.length+1}층`, items: [] }])} style={addFloorBtnS}>+ 층 추가</button>}
         </div>
+
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
           {isAdmin && <button onClick={() => setModalType("changePw")} style={pwBtnS}>비밀번호 변경</button>}
           <button onClick={() => isAdmin ? setIsAdmin(false) : setModalType("login")} style={adminBtnS(isAdmin)}>{isAdmin ? "편집 종료" : "관리자 로그인"}</button>
@@ -276,7 +286,7 @@ function DraggableComponent({ item, isSelected, isAdmin, onSelect, onDrag }: any
 
 // 스타일 시트
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f8fafc", fontFamily: "sans-serif", fontSize: "13px" };
-const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "20px", display: "flex", flexDirection: "column" };
+const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px 20px", display: "flex", flexDirection: "column" };
 const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", overflowY: "auto" };
 const canvasS: any = { width: "100%", height: "100%", backgroundColor: "#fff", borderRadius: "15px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden", cursor: "crosshair" };
 const inputS: any = { width: "100%", padding: "8px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "12px", outline: "none" };
@@ -287,16 +297,17 @@ const adminBtnS: any = (adm: boolean) => ({ padding: "10px", backgroundColor: ad
 const actionBtnS: any = (bg: string, co: string) => ({ padding: "10px", backgroundColor: bg, color: co, border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "600" });
 const floorBtnS: any = (act: boolean) => ({ padding: "8px", backgroundColor: act ? "#2563eb" : "#f1f5f9", color: act ? "#fff" : "#64748b", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" });
 const floorInputS: any = { padding: "4px", border: "1px solid #e2e8f0", borderRadius: "5px", fontSize: "11px" };
-const statsCardS: any = { padding: "12px", backgroundColor: "#f8fafc", borderRadius: "10px", marginBottom: "20px", border: "1px solid #eef2ff" };
-const groupRowS: any = { display: "flex", justifyContent: "space-between", padding: "6px", cursor: "pointer", borderRadius: "5px" };
+const statsCardS: any = { padding: "12px", backgroundColor: "#f8fafc", borderRadius: "10px", marginBottom: "15px", border: "1px solid #e2e8f0" };
+const groupRowS: any = { display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer" };
 const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px", marginTop: "8px" };
 const paletteItemS: any = { height: "20px", borderRadius: "4px", cursor: "pointer" };
 const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalContentS: any = { backgroundColor: "#fff", padding: "20px", borderRadius: "15px", width: "260px", textAlign: "center" };
-const subBtnS: any = { padding: "10px", border: "1px solid #e2e8f0", borderRadius: "10px", backgroundColor: "#fff", cursor: "pointer", width: "100%" };
+const modalContentS: any = { backgroundColor: "#fff", padding: "20px", borderRadius: "15px", width: "280px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.1)" };
+const modalInputS: any = { width: "100%", padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", outline: "none", textAlign: "center", boxSizing: "border-box" };
+const subBtnS: any = { padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer", width: "100%", fontWeight: "bold" };
 const gridOverlayS: any = { position: "absolute", inset: 0, backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "20px 20px", pointerEvents: "none" };
-const titleEditS: any = { fontSize: "16px", fontWeight: "bold", padding: "6px", border: "1px solid #2563eb", borderRadius: "8px", marginBottom: "20px", width: "100%", outline: "none" };
+const titleEditS: any = { fontSize: "16px", fontWeight: "bold", padding: "6px", border: "1px solid #2563eb", borderRadius: "8px", marginBottom: "15px", width: "100%", outline: "none" };
 const addFloorBtnS: any = { width: "100%", padding: "6px", border: "1px dashed #cbd5e1", background: "none", borderRadius: "8px", color: "#94a3b8", cursor: "pointer", fontSize: "11px", marginTop: "5px" };
 const smallBtnS: any = { padding: "0 10px", backgroundColor: "#f1f5f9", border: "none", borderRadius: "5px", fontSize: "11px", cursor: "pointer" };
 const pwBtnS: any = { padding: "4px", background: "none", border: "1px solid #e2e8f0", borderRadius: "6px", color: "#64748b", fontSize: "10px", cursor: "pointer", marginBottom: "5px", alignSelf: "flex-end" };
-const deleteBtnS: any = { width: "100%", padding: "10px", color: "red", border: "1px solid #fee2e2", borderRadius: "10px", cursor: "pointer", background: "none", fontWeight: "bold" };
+const deleteBtnS: any = { width: "100%", padding: "10px", color: "#ef4444", border: "1px solid #fee2e2", borderRadius: "10px", cursor: "pointer", backgroundColor: "#fff5f5", fontWeight: "bold" };
