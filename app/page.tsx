@@ -127,25 +127,24 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
-      {/* 비밀번호/인증 모달 수정 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
             <h3 style={{ marginBottom: "15px", fontSize: "15px" }}>{modalType === "login" ? "관리자 인증" : "비밀번호 설정"}</h3>
-            <div style={{ padding: "0 10px" }}> {/* 좌우 여백 정렬을 위한 컨테이너 */}
+            <div style={{ width: "100%", padding: "0 20px", boxSizing: "border-box" }}>
               <input 
                 type="password" 
                 value={modalInput} 
                 onChange={(e) => setModalInput(e.target.value)} 
                 onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} 
                 style={modalInputS} 
-                placeholder="비밀번호 입력"
+                placeholder="비밀번호"
                 autoFocus 
               />
-            </div>
-            <div style={{ display: "flex", gap: "8px", marginTop: "20px", padding: "0 10px" }}>
-              <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인</button>
-              <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
+              <div style={{ display: "flex", gap: "8px", marginTop: "20px" }}>
+                <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인</button>
+                <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
+              </div>
             </div>
           </div>
         </div>
@@ -157,8 +156,7 @@ export default function SeatMapSystem() {
         {isAdmin && (
           <div style={statsCardS}>
             <p style={{ fontSize: "11px", color: "#6366f1", marginBottom: "6px", fontWeight: "600" }}>💡 부서 색상 클릭 시 그룹 선택</p>
-            {/* 총 좌석 수 글자 키움 & 상단 공백 조절 */}
-            <div style={{ fontWeight: "800", color: "#1e293b", fontSize: "17px", marginBottom: "10px", borderBottom: "1px solid #e2e8f0", pb: "5px" }}>총 {stats.total}석</div>
+            <div style={{ fontWeight: "800", color: "#1e293b", fontSize: "17px", marginBottom: "10px", borderBottom: "1px solid #e2e8f0", paddingBottom: "8px" }}>총 {stats.total}석</div>
             <div style={{ maxHeight: "150px", overflowY: "auto" }}>
               {Object.entries(stats.teams).map(([color, count]: any) => (
                 <div key={color} onClick={() => setSelectedIds(currentItems.filter(i => i.color === color).map(i => i.id))} style={groupRowS}>
@@ -284,7 +282,6 @@ function DraggableComponent({ item, isSelected, isAdmin, onSelect, onDrag }: any
   );
 }
 
-// 스타일 시트
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f8fafc", fontFamily: "sans-serif", fontSize: "13px" };
 const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px 20px", display: "flex", flexDirection: "column" };
 const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", overflowY: "auto" };
@@ -302,8 +299,8 @@ const groupRowS: any = { display: "flex", justifyContent: "space-between", paddi
 const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px", marginTop: "8px" };
 const paletteItemS: any = { height: "20px", borderRadius: "4px", cursor: "pointer" };
 const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalContentS: any = { backgroundColor: "#fff", padding: "20px", borderRadius: "15px", width: "280px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.1)" };
-const modalInputS: any = { width: "100%", padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", outline: "none", textAlign: "center", boxSizing: "border-box" };
+const modalContentS: any = { backgroundColor: "#fff", padding: "20px 0", borderRadius: "15px", width: "300px", textAlign: "center", boxShadow: "0 10px 25px rgba(0,0,0,0.1)" };
+const modalInputS: any = { width: "100%", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "14px", outline: "none", textAlign: "center" };
 const subBtnS: any = { padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer", width: "100%", fontWeight: "bold" };
 const gridOverlayS: any = { position: "absolute", inset: 0, backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "20px 20px", pointerEvents: "none" };
 const titleEditS: any = { fontSize: "16px", fontWeight: "bold", padding: "6px", border: "1px solid #2563eb", borderRadius: "8px", marginBottom: "15px", width: "100%", outline: "none" };
