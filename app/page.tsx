@@ -3,7 +3,6 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import Draggable from "react-draggable";
 
-// --- 타입 정의 ---
 type ItemType = "seat" | "wall" | "door";
 interface RoomItem {
   id: number; type: ItemType; name: string; rotation: number;
@@ -31,13 +30,11 @@ export default function SeatMapSystem() {
 
   useEffect(() => { setHasMounted(true); }, []);
 
-  // --- 키보드 삭제(Delete) 기능 추가 ---
+  // 키보드 삭제 기능
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isAdmin || selectedIds.length === 0) return;
-      // 입력창(input)에서 글자 지울 때는 작동 안하게 방어
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
       if (e.key === "Delete" || e.key === "Backspace") {
         if (confirm(`선택한 ${selectedIds.length}개 항목을 삭제하시겠습니까?`)) {
           updateItems(currentItems.filter(i => !selectedIds.includes(i.id)));
@@ -74,7 +71,6 @@ export default function SeatMapSystem() {
     } else if (modalType === "error") { setModalType("login"); }
   };
 
-  // 영역 선택
   const onCanvasMouseDown = (e: React.MouseEvent) => {
     if (!isAdmin) return;
     if (e.target !== canvasRef.current) return;
@@ -117,15 +113,15 @@ export default function SeatMapSystem() {
     }
   };
 
-  // 90도/180도 회전 로직 (안먹히던 문제 수정)
-  const rotateItems = (deg: number) => {
+  // 회전 기능 핵심 수정
+  const rotateItems = (type: "90" | "180") => {
     updateItems(currentItems.map(i => {
       if (selectedIds.includes(i.id)) {
-        if (deg === 90) {
-          // 가로세로를 실제로 맞바꿈
+        if (type === "90") {
+          // 90도는 가로세로 교체 + 각도 90도 증가
           return { ...i, width: i.height, height: i.width, rotation: (i.rotation + 90) % 360 };
         } else {
-          // 180도는 각도만 회전
+          // 180도는 각도만 180도 증가
           return { ...i, rotation: (i.rotation + 180) % 360 };
         }
       }
@@ -219,10 +215,10 @@ export default function SeatMapSystem() {
                 </div>
               </div>
               <div style={propCardS}>
-                <label style={labelS}>배치 도구 (키보드 Del키로 삭제 가능)</label>
+                <label style={labelS}>배치 도구</label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
-                  <button onClick={() => rotateItems(90)} style={toolBtn}>90° 회전</button>
-                  <button onClick={() => rotateItems(180)} style={toolBtn}>180° 회전</button>
+                  <button onClick={() => rotateItems("90")} style={toolBtn}>90° 회전</button>
+                  <button onClick={() => rotateItems("180")} style={toolBtn}>180° 회전</button>
                   <button onClick={() => { const first = currentItems.find(i => i.id === selectedIds[0]); if(first) updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, x: first.x } : i)); }} style={toolBtn}>세로 정렬</button>
                   <button onClick={() => { const first = currentItems.find(i => i.id === selectedIds[0]); if(first) updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, y: first.y } : i)); }} style={toolBtn}>가로 정렬</button>
                 </div>
@@ -236,7 +232,10 @@ export default function SeatMapSystem() {
                   <input type="number" value={selectedItem.height} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, height: +e.target.value } : i))} style={inputS} />
                 </div>
               </div>
-              <button onClick={() => { if(confirm("삭제하시겠습니까?")) { updateItems(currentItems.filter(i => !selectedIds.includes(i.id))); setSelectedIds([]); } }} style={deleteBtnS}>항목 삭제</button>
+              <div style={{marginTop: "10px"}}>
+                <p style={{fontSize: "11px", color: "#94a3b8", textAlign: "center", marginBottom: "5px"}}>💡 키보드 Del키로 삭제 가능</p>
+                <button onClick={() => { if(confirm("삭제하시겠습니까?")) { updateItems(currentItems.filter(i => !selectedIds.includes(i.id))); setSelectedIds([]); } }} style={deleteBtnS}>항목 삭제</button>
+              </div>
             </div>
           ) : <div style={{ textAlign: "center", color: "#94a3b8", marginTop: "50px" }}>아이템을 드래그하여<br/>선택해 보세요.</div>}
         </div>
