@@ -10,6 +10,7 @@ interface RoomItem {
   width: number; height: number; x: number; y: number;
 }
 interface FloorInfo { id: string; displayName: string; items: RoomItem[]; }
+interface SavedVersion { id: string; name: string; date: string; data: FloorInfo[]; }
 
 export default function SeatMapSystem() {
   const [hasMounted, setHasMounted] = useState(false);
@@ -18,7 +19,7 @@ export default function SeatMapSystem() {
   const [adminPassword, setAdminPassword] = useState("1234");
   const [canvasBg, setCanvasBg] = useState("#ffffff");
 
-  const [modalType, setModalType] = useState<"login" | "changePw" | "alert" | "confirm" | null>(null);
+  const [modalType, setModalType] = useState<"login" | "changePw" | "alert" | "confirm" | "saveVersion" | null>(null);
   const [modalInput, setModalInput] = useState("");
   const [modalMsg, setModalMsg] = useState("");
   
@@ -26,6 +27,7 @@ export default function SeatMapSystem() {
   const [activeFloorId, setActiveFloorId] = useState<string>("F1");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [teamNames, setTeamNames] = useState<{ [key: string]: string }>({});
+  const [savedVersions, setSavedVersions] = useState<SavedVersion[]>([]);
   const [customPalette, setCustomPalette] = useState<string[]>(["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#64748b", "#333333"]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -39,7 +41,6 @@ export default function SeatMapSystem() {
   const selectedItems = useMemo(() => currentItems.filter(i => selectedIds.includes(i.id)), [currentItems, selectedIds]);
   const firstSelected = selectedItems[0];
 
-  // 1. 전체 좌석수 포함 통계
   const stats = useMemo(() => {
     const allSeats = floors.reduce((acc, f) => acc + f.items.filter(i => i.type === "seat").length, 0);
     const floorSeats = currentItems.filter(i => i.type === "seat");
@@ -54,15 +55,6 @@ export default function SeatMapSystem() {
     setFloors(prev => prev.map(f => f.id === activeFloorId ? { ...f, items: newItems } : f));
   };
 
-  // 2. 층 순서 변경 (위/아래)
-  const moveFloor = (index: number, direction: 'up' | 'down') => {
-    const newFloors = [...floors];
-    const targetIndex = direction === 'up' ? index - 1 : index + 1;
-    if (targetIndex < 0 || targetIndex >= floors.length) return;
-    [newFloors[index], newFloors[targetIndex]] = [newFloors[targetIndex], newFloors[index]];
-    setFloors(newFloors);
-  };
-
   const addItem = (type: ItemType) => {
     const id = Date.now();
     const newItem: RoomItem = {
@@ -74,7 +66,18 @@ export default function SeatMapSystem() {
     setSelectedIds([id]);
   };
 
-  // 7. 정렬 기능 (가로/세로)
+  const copySelected = () => {
+    const newItems = [...currentItems];
+    const newIds: number[] = [];
+    selectedItems.forEach(item => {
+      const id = Date.now() + Math.random();
+      newItems.push({ ...item, id, x: item.x + 20, y: item.y + 20 });
+      newIds.push(id);
+    });
+    updateItems(newItems);
+    setSelectedIds(newIds);
+  };
+
   const alignObjects = (type: 'horizontal' | 'vertical') => {
     if (selectedItems.length < 2) return;
     if (type === 'horizontal') {
@@ -86,20 +89,15 @@ export default function SeatMapSystem() {
     }
   };
 
-  // 6. 스포이드 색상 팔레트에 추가
-  const addToPalette = (color: string) => {
-    if (!customPalette.includes(color)) {
-      setCustomPalette([color, ...customPalette.slice(0, 14)]);
-    }
-    updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, color } : i));
-  };
-
   const handleModalConfirm = () => {
     if (modalType === "login") {
       if (modalInput === adminPassword) { setIsAdmin(true); setModalType(null); }
       else { setModalMsg("비밀번호가 틀렸습니다."); setModalType("alert"); }
     } else if (modalType === "changePw") {
       setAdminPassword(modalInput); setModalType(null);
+    } else if (modalType === "saveVersion") {
+      setSavedVersions([{ id: `V-${Date.now()}`, name: modalInput || "새 버전", date: new Date().toLocaleString(), data: JSON.parse(JSON.stringify(floors)) }, ...savedVersions]);
+      setModalType(null);
     }
     setModalInput("");
   };
@@ -112,11 +110,8 @@ export default function SeatMapSystem() {
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
-            <h3 style={{marginBottom: "15px", fontWeight: "bold"}}>{modalType === "changePw" ? "비밀번호 변경" : "확인"}</h3>
-            {(modalType === "login" || modalType === "changePw") && (
-              <input type="password" value={modalInput} onChange={(e) => setModalInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} style={modalInputS} autoFocus />
-            )}
-            {modalType === "alert" && <p>{modalMsg}</p>}
+            <h3 style={{marginBottom: "15px", fontWeight: "bold"}}>{modalType === "changePw" ? "비밀번호 설정" : modalType === "saveVersion" ? "버전 저장" : "알림"}</h3>
+            <input type={(modalType === "login" || modalType === "changePw") ? "password" : "text"} value={modalInput} onChange={(e) => setModalInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} style={modalInputS} autoFocus placeholder="내용 입력..." />
             <div style={{display: "flex", gap: "10px", justifyContent: "center", marginTop: "20px"}}>
               <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인</button>
               <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
@@ -130,34 +125,46 @@ export default function SeatMapSystem() {
         {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{fontWeight: "bold", fontSize: "16px", marginBottom: "20px"}}>{appTitle}</h2>}
         
         <div style={{marginBottom: "20px"}}>
-          <label style={labelS}>층 이동 및 순서</label>
+          <label style={labelS}>층 관리</label>
           <div style={{display: "flex", flexDirection: "column", gap: "5px"}}>
             {floors.map((f, idx) => (
               <div key={f.id} style={{display: "flex", gap: "2px", alignItems: "center"}}>
                 <button onClick={() => setActiveFloorId(f.id)} style={{...floorBtnS(activeFloorId === f.id), flex: 1}}>{f.displayName}</button>
                 {isAdmin && (
-                  <>
-                    <button onClick={() => moveFloor(idx, 'up')} style={moveBtnS}>▲</button>
-                    <button onClick={() => moveFloor(idx, 'down')} style={moveBtnS}>▼</button>
-                  </>
+                  <div style={{display: "flex", gap: "2px"}}>
+                    <button onClick={() => {
+                        const newFloors = [...floors];
+                        if (idx > 0) { [newFloors[idx], newFloors[idx-1]] = [newFloors[idx-1], newFloors[idx]]; setFloors(newFloors); }
+                    }} style={moveBtnS}>▲</button>
+                    <button onClick={() => {
+                        const newFloors = [...floors];
+                        if (idx < floors.length - 1) { [newFloors[idx], newFloors[idx+1]] = [newFloors[idx+1], newFloors[idx]]; setFloors(newFloors); }
+                    }} style={moveBtnS}>▼</button>
+                    <button onClick={() => {
+                        if (floors.length > 1 && confirm("층을 삭제하시겠습니까?")) {
+                            const nf = floors.filter(it => it.id !== f.id);
+                            setFloors(nf); if(activeFloorId === f.id) setActiveFloorId(nf[0].id);
+                        }
+                    }} style={floorDelBtnS}>×</button>
+                  </div>
                 )}
               </div>
             ))}
+            {isAdmin && <button onClick={() => setFloors([...floors, { id: `F${Date.now()}`, displayName: `${floors.length + 1}층`, items: [] }])} style={addFloorBtnS}>+ 층 추가</button>}
           </div>
         </div>
 
-        {/* 1. 통계 영역 (전체 좌석수 추가) */}
         {isAdmin && (
           <div style={statsCardS}>
-            <div style={{fontWeight: "bold", fontSize: "12px", marginBottom: "8px"}}>📊 좌석 통계</div>
-            <div style={{fontSize: "11px", color: "#64748b", marginBottom: "10px"}}>전체: {stats.totalAll}석 / 현재 층: {stats.totalFloor}석</div>
+            <div style={{fontWeight: "bold", fontSize: "12px", marginBottom: "5px"}}>📊 좌석 통계</div>
+            <div style={{fontSize: "11px", color: "#64748b", marginBottom: "10px"}}>전체: {stats.totalAll}석 / 현재: {stats.totalFloor}석</div>
             {Object.entries(stats.counts).map(([color, count]: any) => (
               <div key={color} style={{...teamRowS, cursor: 'pointer'}} onClick={() => setSelectedIds(currentItems.filter(i => i.color === color).map(i => i.id))}>
-                <div style={{display: "flex", alignItems: "center", gap: "6px"}}>
+                <div style={{display: "flex", alignItems: "center", gap: "5px"}}>
                   <div style={{width: "10px", height: "10px", backgroundColor: color, borderRadius: "2px"}} />
                   <input value={teamNames[color] || ""} placeholder="부서명" onChange={(e) => setTeamNames({...teamNames, [color]: e.target.value})} style={teamInputS} onClick={(e) => e.stopPropagation()} />
                 </div>
-                <b style={{fontSize: "11px"}}>{count}석</b>
+                <b style={{fontSize: "10px"}}>{count}석</b>
               </div>
             ))}
           </div>
@@ -165,18 +172,19 @@ export default function SeatMapSystem() {
 
         <div style={{marginTop: "auto", display: "flex", flexDirection: "column", gap: "8px"}}>
           {isAdmin && (
-            <div style={{display: "grid", gridTemplateColumns: "1fr", gap: "5px"}}>
-              <div style={{display: "flex", gap: "5px", alignItems: "center", marginBottom: "5px"}}>
-                <label style={{fontSize: "11px"}}>배경색:</label>
-                <input type="color" value={canvasBg} onChange={(e) => setCanvasBg(e.target.value)} style={{flex: 1, height: "25px", border: "none", cursor: "pointer"}} />
-                <div style={eyedropperS} />
+            <>
+              <button onClick={() => setModalType("saveVersion")} style={subBtnS}>현재 버전 저장 (히스토리)</button>
+              <div style={historyBoxS}>
+                {savedVersions.map(v => (
+                  <div key={v.id} onClick={() => { if(confirm(`${v.name} 버전으로 복구할까요?`)) setFloors(v.data); }} style={historyItemS}>{v.name} ({v.date.split(' ')[1]})</div>
+                ))}
               </div>
               <button onClick={() => addItem("seat")} style={actionBtnS("#eff6ff", "#2563eb")}>좌석 추가</button>
               <div style={{display: "flex", gap: "5px"}}>
                 <button onClick={() => addItem("wall")} style={{...actionBtnS("#f8fafc", "#333"), flex: 1}}>벽체 추가</button>
                 <button onClick={() => addItem("door")} style={{...actionBtnS("#ecfdf5", "#10b981"), flex: 1}}>문 추가</button>
               </div>
-            </div>
+            </>
           )}
           <button onClick={() => isAdmin ? setIsAdmin(false) : setModalType("login")} style={adminBtnS(isAdmin)}>{isAdmin ? "편집 종료" : "관리자 로그인"}</button>
         </div>
@@ -203,14 +211,13 @@ export default function SeatMapSystem() {
               <div style={{ position: "absolute", zIndex: selectedIds.includes(item.id) ? 100 : 10 }}>
                 <div style={{ 
                   transform: `rotate(${item.rotation}deg)`, width: item.width, height: item.height, 
-                  // 4. 배경 투명도가 글자에 영향 안 주도록 rgba 처리
-                  backgroundColor: item.color, opacity: item.opacity,
+                  backgroundColor: item.color, opacity: item.opacity, // 배경 투명도
                   border: selectedIds.includes(item.id) ? "2px solid #2563eb" : "1px solid #ddd",
                   borderRadius: item.type === "door" ? `${item.width}px ${item.width}px 0 0` : "4px", 
                   display: "flex", alignItems: "center", justifyContent: "center",
                   color: item.textColor, fontSize: "11px", fontWeight: "bold"
                 }}>
-                  <span style={{opacity: item.textOpacity}}>{item.name}</span>
+                  <span style={{opacity: item.textOpacity}}>{item.name}</span> 
                 </div>
               </div>
             </Draggable>
@@ -221,43 +228,51 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
-      {/* 우측 설정 */}
+      {/* 상세 설정 패널 */}
       {isAdmin && (
         <div style={rightPanelS}>
-          <h2 style={{fontSize: "14px", fontWeight: "bold", marginBottom: "15px"}}>상세 설정</h2>
+          <h2 style={{fontSize: "14px", fontWeight: "bold", marginBottom: "15px"}}>항목 설정</h2>
           {firstSelected ? (
             <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
               <div style={propCardS}><label style={labelS}>이름</label>
                 <input value={firstSelected.name} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, name: e.target.value} : i))} style={inputS} />
               </div>
-              
-              <div style={propCardS}><label style={labelS}>정렬</label>
+
+              <div style={propCardS}><label style={labelS}>크기 (W / H)</label>
                 <div style={{display: "flex", gap: "5px"}}>
-                  <button onClick={() => alignObjects('horizontal')} style={utilBtnS}>가로 정렬</button>
-                  <button onClick={() => alignObjects('vertical')} style={utilBtnS}>세로 정렬</button>
+                  <input type="number" value={firstSelected.width} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, width: +e.target.value} : i))} style={inputS} />
+                  <input type="number" value={firstSelected.height} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, height: +e.target.value} : i))} style={inputS} />
                 </div>
               </div>
 
-              <div style={propCardS}><label style={labelS}>색상 (스포이드 선택 시 추가됨)</label>
+              <div style={propCardS}><label style={labelS}>배경색 및 투명도</label>
                 <div style={paletteS}>
                   {customPalette.map(c => <div key={c} onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, color: c} : i))} style={{...paletteItemS, backgroundColor: c, border: firstSelected.color === c ? "2px solid #000" : "1px solid #ddd"}} />)}
-                  <input type="color" value={firstSelected.color} onChange={(e) => addToPalette(e.target.value)} style={colorPickerS} />
+                  <input type="color" value={firstSelected.color} onChange={(e) => {
+                    const c = e.target.value;
+                    if(!customPalette.includes(c)) setCustomPalette([c, ...customPalette.slice(0, 14)]);
+                    updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, color: c} : i));
+                  }} style={colorPickerS} />
                 </div>
                 <input type="range" min="0" max="1" step="0.1" value={firstSelected.opacity} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, opacity: +e.target.value} : i))} style={{width: "100%", marginTop: "10px"}} />
               </div>
 
-              <div style={propCardS}><label style={labelS}>글자 설정</label>
+              <div style={propCardS}><label style={labelS}>글자색 및 투명도</label>
                 <input type="color" value={firstSelected.textColor} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, textColor: e.target.value} : i))} style={{width: "100%", height: "25px", border: "1px solid #ddd", marginBottom: "5px"}} />
                 <input type="range" min="0" max="1" step="0.1" value={firstSelected.textOpacity} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, textOpacity: +e.target.value} : i))} style={{width: "100%"}} />
               </div>
 
-              <div style={propCardS}><label style={labelS}>회전</label>
-                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px"}}>
+              <div style={propCardS}><label style={labelS}>회전 / 정렬 / 복제</label>
+                <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", marginBottom: "5px"}}>
                   <button onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, rotation: (i.rotation + 90) % 360} : i))} style={utilBtnS}>90°</button>
                   <button onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, rotation: (i.rotation + 180) % 360} : i))} style={utilBtnS}>180°</button>
+                  <button onClick={() => alignObjects('horizontal')} style={utilBtnS}>가로정렬</button>
+                  <button onClick={() => alignObjects('vertical')} style={utilBtnS}>세로정렬</button>
                 </div>
+                <button onClick={copySelected} style={{...utilBtnS, width: "100%", backgroundColor: "#f0fdf4", color: "#16a34a"}}>선택 항목 복제</button>
               </div>
               <button onClick={() => updateItems(currentItems.filter(i => !selectedIds.includes(i.id)))} style={deleteBtnS}>삭제</button>
+              <button onClick={() => setModalType("changePw")} style={{...subBtnS, fontSize: "10px", marginTop: "10px"}}>비번 변경</button>
             </div>
           ) : <p style={{color: "#94a3b8", fontSize: "11px", textAlign: "center", marginTop: "50px"}}>항목을 선택하세요.</p>}
         </div>
@@ -268,27 +283,30 @@ export default function SeatMapSystem() {
 
 // 스타일
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f1f5f9", overflow: "hidden" };
-const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px", display: "flex", flexDirection: "column" };
-const rightPanelS: any = { width: "240px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "15px", overflowY: "auto" };
-const canvasS: any = { width: "100%", height: "100%", borderRadius: "12px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden", backgroundSize: "20px 20px", backgroundImage: "linear-gradient(to right, #f1f5f9 1px, transparent 1px), linear-gradient(to bottom, #f1f5f9 1px, transparent 1px)" };
+const sidebarS: any = { width: "250px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px", display: "flex", flexDirection: "column" };
+const rightPanelS: any = { width: "250px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "15px", overflowY: "auto" };
+const canvasS: any = { width: "100%", height: "100%", borderRadius: "12px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden", backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "20px 20px" };
 const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000 };
 const modalContentS: any = { backgroundColor: "#fff", padding: "25px", borderRadius: "15px", width: "300px", boxSizing: "border-box", textAlign: "center" };
 const modalInputS: any = { width: "100%", padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", boxSizing: "border-box" };
-const eyedropperS: any = { width: "14px", height: "14px", borderRadius: "50%", border: "2px solid #333", marginLeft: "5px" };
 const adminBtnS: any = (adm: boolean) => ({ padding: "10px", backgroundColor: adm ? "#1e293b" : "#2563eb", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "12px" });
-const subBtnS: any = { padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer", fontSize: "12px" };
+const subBtnS: any = { padding: "8px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer", fontSize: "11px" };
 const actionBtnS: any = (bg: string, co: string) => ({ padding: "10px", backgroundColor: bg, color: co, border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "11px" });
 const floorBtnS: any = (act: boolean) => ({ padding: "8px", backgroundColor: act ? "#2563eb" : "#f1f5f9", color: act ? "#fff" : "#64748b", border: "none", borderRadius: "6px", cursor: "pointer", fontSize: "11px", fontWeight: "bold", textAlign: "left" });
-const moveBtnS: any = { padding: "4px 8px", fontSize: "10px", border: "1px solid #e2e8f0", borderRadius: "4px", backgroundColor: "#fff", cursor: "pointer" };
+const moveBtnS: any = { padding: "4px 6px", fontSize: "10px", border: "1px solid #e2e8f0", borderRadius: "4px", backgroundColor: "#fff", cursor: "pointer" };
+const floorDelBtnS: any = { padding: "4px 8px", fontSize: "12px", border: "none", borderRadius: "4px", backgroundColor: "#fee2e2", color: "#ef4444", cursor: "pointer" };
+const addFloorBtnS: any = { width: "100%", padding: "8px", border: "1px dashed #cbd5e1", background: "none", borderRadius: "8px", color: "#64748b", cursor: "pointer", fontSize: "11px", marginTop: "5px" };
 const statsCardS: any = { padding: "10px", backgroundColor: "#f8fafc", borderRadius: "10px", marginBottom: "15px", border: "1px solid #e2e8f0" };
 const teamRowS: any = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "5px" };
 const teamInputS: any = { border: "none", borderBottom: "1px solid #ddd", fontSize: "10px", backgroundColor: "transparent", width: "70px" };
+const historyBoxS: any = { maxHeight: "80px", overflowY: "auto", border: "1px solid #eee", borderRadius: "8px", padding: "5px", marginBottom: "10px", fontSize: "10px" };
+const historyItemS: any = { padding: "4px", borderBottom: "1px solid #f9f9f9", cursor: "pointer" };
 const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px" };
 const paletteItemS: any = { height: "20px", borderRadius: "3px", cursor: "pointer" };
 const colorPickerS: any = { width: "100%", height: "20px", padding: "0", border: "none", cursor: "pointer", gridColumn: "span 2" };
 const propCardS: any = { padding: "10px", border: "1px solid #f1f5f9", borderRadius: "8px", backgroundColor: "#fff", marginBottom: "8px" };
 const labelS: any = { fontSize: "10px", color: "#94a3b8", fontWeight: "bold", marginBottom: "5px", display: "block" };
 const inputS: any = { width: "100%", padding: "6px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "11px", boxSizing: "border-box" };
-const utilBtnS: any = { flex: 1, padding: "8px", backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "10px", cursor: "pointer" };
+const utilBtnS: any = { padding: "8px", backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "10px", cursor: "pointer" };
 const deleteBtnS: any = { width: "100%", padding: "10px", backgroundColor: "#fff1f2", color: "#e11d48", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "12px" };
 const titleEditS: any = { fontSize: "14px", fontWeight: "bold", border: "2px solid #2563eb", borderRadius: "6px", width: "100%", marginBottom: "15px", padding: "8px", boxSizing: "border-box" };
