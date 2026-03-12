@@ -26,10 +26,13 @@ export default function SeatMapSystem() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [teamNames, setTeamNames] = useState<{ [key: string]: string }>({});
   const [savedVersions, setSavedVersions] = useState<SavedVersion[]>([]);
+  
+  // 캔버스 참조 변수 (에러 해결 핵심)
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setHasMounted(true); }, []);
 
-  // --- 1. 데이터 계산부 (순서 에러 방지) ---
+  // --- 1. 데이터 계산부 (선언 순서 에러 방지) ---
   const currentFloor = useMemo(() => floors.find(f => f.id === activeFloorId) || floors[0], [floors, activeFloorId]);
   const currentItems = currentFloor.items;
   const selectedItem = useMemo(() => currentItems.find(i => i.id === selectedIds[0]), [currentItems, selectedIds]);
@@ -53,10 +56,17 @@ export default function SeatMapSystem() {
     const newItem: RoomItem = {
       id, type, name: type === "seat" ? "새 좌석" : "", rotation: 0,
       color: type === "seat" ? "#3b82f6" : type === "wall" ? "#333" : "#94a3b8",
-      width: type === "wall" ? 100 : 45, height: type === "wall" ? 6 : 45, x: 50, y: 50
+      width: type === "wall" ? 120 : 45, height: type === "wall" ? 8 : 45, x: 100, y: 100
     };
     updateItems([...currentItems, newItem]);
     setSelectedIds([id]);
+  };
+
+  const deleteVersion = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm("해당 히스토리 버전을 삭제하시겠습니까?")) {
+      setSavedVersions(savedVersions.filter(v => v.id !== id));
+    }
   };
 
   const handleModalConfirm = () => {
@@ -68,7 +78,7 @@ export default function SeatMapSystem() {
     } else if (modalType === "saveVersion") {
       const newVer = { id: `V-${Date.now()}`, name: modalInput || "이름 없는 버전", date: new Date().toLocaleString(), data: JSON.parse(JSON.stringify(floors)) };
       setSavedVersions([newVer, ...savedVersions]);
-      setModalType("alert"); setModalMsg("현재 배치가 저장되었습니다.");
+      setModalType("alert"); setModalMsg(`'${modalInput}' 버전이 저장되었습니다.`);
     } else if (modalType === "confirm") {
       updateItems(currentItems.filter(i => !selectedIds.includes(i.id)));
       setSelectedIds([]); setModalType(null);
@@ -84,7 +94,7 @@ export default function SeatMapSystem() {
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
-            <h3 style={{ marginBottom: "20px", fontWeight: "bold" }}>
+            <h3 style={{ marginBottom: "20px", fontWeight: "bold", fontSize: "16px" }}>
               {modalType === "login" ? "관리자 인증" : modalType === "changePw" ? "비밀번호 설정" : modalType === "saveVersion" ? "배치도 버전 저장" : "알림"}
             </h3>
             <div style={{ padding: "0 25px" }}>
@@ -92,7 +102,7 @@ export default function SeatMapSystem() {
                 <input 
                   type={modalType === "saveVersion" ? "text" : "password"}
                   value={modalInput} onChange={(e) => setModalInput(e.target.value)}
-                  style={modalInputS} placeholder={modalType === "saveVersion" ? "버전 이름 (예: 3월 배치)" : "비밀번호 입력"}
+                  style={modalInputS} placeholder={modalType === "saveVersion" ? "버전 이름 (예: 3월 정기 이동)" : "내용 입력"}
                   autoFocus onKeyDown={(e) => e.key === "Enter" && handleModalConfirm()}
                 />
               )}
@@ -123,9 +133,13 @@ export default function SeatMapSystem() {
             <div style={{marginBottom: "20px"}}>
               <label style={labelS}>히스토리 (버전 관리)</label>
               <div style={versionListS}>
+                {savedVersions.length === 0 && <p style={{fontSize: "10px", color: "#ccc", textAlign: "center"}}>기록 없음</p>}
                 {savedVersions.map(v => (
                   <div key={v.id} onClick={() => setFloors(v.data)} style={versionItemS}>
-                    <b>{v.name}</b><br/><small>{v.date}</small>
+                    <div style={{flex: 1}}>
+                      <b>{v.name}</b><br/><small>{v.date}</small>
+                    </div>
+                    <button onClick={(e) => deleteVersion(v.id, e)} style={verDelBtnS}>삭제</button>
                   </div>
                 ))}
               </div>
@@ -151,12 +165,12 @@ export default function SeatMapSystem() {
               </div>
             </div>
           )}
-          {isAdmin && <button onClick={() => setModalType("changePw")} style={pwBtnS}>비밀번호 변경</button>}
+          {isAdmin && <button onClick={() => setModalType("changePw")} style={pwBtnS}>비밀번호 설정</button>}
           <button onClick={() => isAdmin ? setIsAdmin(false) : setModalType("login")} style={adminBtnS(isAdmin)}>{isAdmin ? "편집 종료" : "관리자 로그인"}</button>
         </div>
       </div>
 
-      {/* 캔버스 영역 */}
+      {/* 중앙 캔버스 */}
       <div style={{ flex: 1, padding: "20px", position: "relative" }}>
         <div ref={canvasRef} style={canvasS} onMouseDown={(e) => { if(e.target === canvasRef.current) setSelectedIds([]); }}>
           {currentItems.map((item) => (
@@ -165,7 +179,7 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
-      {/* 오른쪽 설정 패널 */}
+      {/* 오른쪽 상세 설정 */}
       {isAdmin && (
         <div style={rightPanelS}>
           <h2 style={{fontSize: "14px", fontWeight: "bold", marginBottom: "15px"}}>상세 설정</h2>
@@ -173,7 +187,7 @@ export default function SeatMapSystem() {
             <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
               <label style={labelS}>이름</label>
               <input value={selectedItem.name} onChange={(e) => updateItems(currentItems.map(i => i.id === selectedItem.id ? {...i, name: e.target.value} : i))} style={inputS} />
-              <button onClick={() => updateItems(currentItems.filter(i => i.id !== selectedItem.id))} style={deleteBtnS}>삭제하기</button>
+              <button onClick={() => setModalType("confirm")} style={deleteBtnS}>삭제하기</button>
             </div>
           ) : <p style={{color: "#94a3b8", fontSize: "12px", textAlign: "center"}}>항목을 선택하세요.</p>}
         </div>
@@ -200,11 +214,11 @@ function DraggableComponent({ item, isSelected, isAdmin, onSelect, onDrag }: any
   );
 }
 
-// --- 스타일 시트 ---
+// 스타일 시트 (오타 및 누락 복구)
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f8fafc" };
 const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "20px", display: "flex", flexDirection: "column" };
-const rightPanelS: any = { width: "220px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px" };
 const canvasS: any = { width: "100%", height: "100%", backgroundColor: "#fff", borderRadius: "15px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden" };
+const rightPanelS: any = { width: "220px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px" };
 const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
 const modalContentS: any = { backgroundColor: "#fff", padding: "30px 0", borderRadius: "20px", width: "320px", textAlign: "center" };
 const modalInputS: any = { width: "80%", padding: "10px", border: "1px solid #ddd", borderRadius: "8px", marginBottom: "10px" };
@@ -213,11 +227,12 @@ const subBtnS: any = { padding: "10px", border: "1px solid #ddd", borderRadius: 
 const actionBtnS: any = (bg: string, co: string) => ({ padding: "10px", backgroundColor: bg, color: co, border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" });
 const floorBtnS: any = (act: boolean) => ({ width: "100%", padding: "8px", backgroundColor: act ? "#2563eb" : "#f1f5f9", color: act ? "#fff" : "#64748b", border: "none", borderRadius: "6px", marginBottom: "5px", cursor: "pointer" });
 const statsCardS: any = { padding: "12px", backgroundColor: "#f8fafc", borderRadius: "10px", marginBottom: "15px" };
-const versionListS: any = { maxHeight: "100px", overflowY: "auto", border: "1px solid #eee", padding: "5px", borderRadius: "5px", marginBottom: "5px" };
-const versionItemS: any = { padding: "5px", borderBottom: "1px solid #f9f9f9", cursor: "pointer", fontSize: "11px" };
+const versionListS: any = { maxHeight: "150px", overflowY: "auto", border: "1px solid #eee", padding: "5px", borderRadius: "5px", marginBottom: "5px" };
+const versionItemS: any = { display: "flex", alignItems: "center", padding: "8px", borderBottom: "1px solid #f9f9f9", cursor: "pointer", fontSize: "11px" };
+const verDelBtnS: any = { backgroundColor: "#fff1f2", color: "#e11d48", border: "none", padding: "3px 6px", borderRadius: "4px", fontSize: "10px", cursor: "pointer" };
 const saveVerBtnS: any = { width: "100%", padding: "6px", background: "#f1f5f9", border: "none", borderRadius: "4px", fontSize: "11px", cursor: "pointer" };
 const labelS: any = { fontSize: "11px", color: "#94a3b8", fontWeight: "bold", marginBottom: "5px", display: "block" };
 const inputS: any = { width: "100%", padding: "8px", border: "1px solid #ddd", borderRadius: "6px" };
-const deleteBtnS: any = { padding: "8px", backgroundColor: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", marginTop: "10px" };
+const deleteBtnS: any = { padding: "8px", backgroundColor: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3", borderRadius: "6px", cursor: "pointer", fontWeight: "bold", marginTop: "10px", width: "100%" };
 const pwBtnS: any = { background: "none", border: "none", color: "#94a3b8", fontSize: "11px", cursor: "pointer", textDecoration: "underline", marginBottom: "5px" };
 const titleEditS: any = { fontSize: "16px", fontWeight: "bold", border: "1px solid #2563eb", borderRadius: "4px", width: "100%", marginBottom: "15px", padding: "4px" };
