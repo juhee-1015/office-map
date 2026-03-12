@@ -3,6 +3,7 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
 import Draggable from "react-draggable";
 
+// --- 타입 정의 ---
 type ItemType = "seat" | "wall" | "door";
 interface RoomItem {
   id: number; type: ItemType; name: string; rotation: number;
@@ -28,8 +29,6 @@ export default function SeatMapSystem() {
   const [teamNames, setTeamNames] = useState<{ [key: string]: string }>({});
   const [savedVersions, setSavedVersions] = useState<SavedVersion[]>([]);
   const [customPalette, setCustomPalette] = useState<string[]>(["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6"]);
-
-  // 5. 되돌리기(Undo)를 위한 히스토리 상태
   const [history, setHistory] = useState<FloorInfo[][]>([]);
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -39,40 +38,11 @@ export default function SeatMapSystem() {
 
   useEffect(() => { setHasMounted(true); }, []);
 
-  // 단축키 설정 (Delete, Ctrl+Z)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement) return;
-      if (isAdmin) {
-        if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
-          saveHistory();
-          updateItems(currentItems.filter(i => !selectedIds.includes(i.id)));
-          setSelectedIds([]);
-        }
-        if (e.ctrlKey && e.key === "z") {
-          undo();
-        }
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isAdmin, selectedIds, floors, history]);
-
+  // --- 헬퍼 함수 ---
   const currentFloor = useMemo(() => floors.find(f => f.id === activeFloorId) || floors[0], [floors, activeFloorId]);
   const currentItems = currentFloor.items;
   const selectedItems = useMemo(() => currentItems.filter(i => selectedIds.includes(i.id)), [currentItems, selectedIds]);
   const firstSelected = selectedItems[0];
-
-  // 2. 좌석 통계 살려내기
-  const stats = useMemo(() => {
-    const allSeats = floors.reduce((acc, f) => acc + f.items.filter(i => i.type === "seat").length, 0);
-    const floorSeats = currentItems.filter(i => i.type === "seat");
-    const counts = floorSeats.reduce((acc: any, cur) => {
-      acc[cur.color] = (acc[cur.color] || 0) + 1;
-      return acc;
-    }, {});
-    return { totalAll: allSeats, totalFloor: floorSeats.length, counts };
-  }, [floors, currentItems]);
 
   const saveHistory = () => {
     setHistory(prev => [...prev.slice(-19), JSON.parse(JSON.stringify(floors))]);
@@ -89,7 +59,19 @@ export default function SeatMapSystem() {
     setFloors(prev => prev.map(f => f.id === activeFloorId ? { ...f, items: newItems } : f));
   };
 
-  // 4. 정렬 기능
+  // --- 핵심 기능 함수 (이 부분이 누락되면 에러가 납니다) ---
+  const addItem = (type: ItemType) => {
+    saveHistory();
+    const id = Date.now();
+    const newItem: RoomItem = {
+      id, type, name: type === "seat" ? "새 좌석" : "", rotation: 0,
+      color: type === "seat" ? "#3b82f6" : "#333333",
+      textColor: "#ffffff", opacity: 1, textOpacity: 1, width: type === "wall" ? 120 : 45, height: type === "wall" ? 8 : 45, x: 150, y: 150
+    };
+    updateItems([...currentItems, newItem]);
+    setSelectedIds([id]);
+  };
+
   const alignObjects = (type: 'horizontal' | 'vertical') => {
     if (selectedItems.length < 2) return;
     saveHistory();
@@ -101,6 +83,33 @@ export default function SeatMapSystem() {
       updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, x: avgX } : i));
     }
   };
+
+  // --- 단축키 핸들러 ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement) return;
+      if (isAdmin) {
+        if ((e.key === "Delete" || e.key === "Backspace") && selectedIds.length > 0) {
+          saveHistory();
+          updateItems(currentItems.filter(i => !selectedIds.includes(i.id)));
+          setSelectedIds([]);
+        }
+        if (e.ctrlKey && e.key === "z") undo();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAdmin, selectedIds, currentItems, history]);
+
+  const stats = useMemo(() => {
+    const allSeats = floors.reduce((acc, f) => acc + f.items.filter(i => i.type === "seat").length, 0);
+    const floorSeats = currentItems.filter(i => i.type === "seat");
+    const counts = floorSeats.reduce((acc: any, cur) => {
+      acc[cur.color] = (acc[cur.color] || 0) + 1;
+      return acc;
+    }, {});
+    return { totalAll: allSeats, totalFloor: floorSeats.length, counts };
+  }, [floors, currentItems]);
 
   const handleModalConfirm = () => {
     if (modalType === "login" && modalInput === adminPassword) setIsAdmin(true);
@@ -115,6 +124,7 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
+      {/* 모달 레이어 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
@@ -128,6 +138,7 @@ export default function SeatMapSystem() {
         </div>
       )}
 
+      {/* 왼쪽 사이드바 */}
       <div style={sidebarS}>
         {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{fontWeight: "bold", fontSize: "16px", marginBottom: "20px"}}>{appTitle}</h2>}
         
@@ -135,8 +146,7 @@ export default function SeatMapSystem() {
           <label style={labelS}>층 이동 {isAdmin && "(드래그 순서 변경)"}</label>
           <div style={{display: "flex", flexDirection: "column", gap: "4px"}}>
             {floors.map((f, idx) => (
-              <div key={f.id} 
-                draggable={isAdmin} 
+              <div key={f.id} draggable={isAdmin} 
                 onDragStart={() => isAdmin && setDraggedFloorIdx(idx)}
                 onDragOver={(e) => { e.preventDefault(); if(isAdmin && draggedFloorIdx !== null && draggedFloorIdx !== idx) { 
                   const newFloors = [...floors];
@@ -159,15 +169,15 @@ export default function SeatMapSystem() {
           </div>
         </div>
 
-        {/* 좌석 통계 영역 */}
+        {/* 통계 */}
         <div style={statsCardS}>
           <div style={{fontWeight: "bold", fontSize: "12px", marginBottom: "5px"}}>📊 좌석 통계</div>
           <div style={{fontSize: "11px", color: "#64748b", marginBottom: "8px"}}>전체: {stats.totalAll}석 / 현재 층: {stats.totalFloor}석</div>
           {Object.entries(stats.counts).map(([color, count]: any) => (
-            <div key={color} style={{...teamRowS, cursor: 'pointer'}} onClick={() => setSelectedIds(currentItems.filter(i => i.color === color).map(i => i.id))}>
-              <div style={{display: "flex", alignItems: "center", gap: "5px"}}>
+            <div key={color} style={teamRowS}>
+              <div style={{display: "flex", alignItems: "center", gap: "5px", flex: 1}}>
                 <div style={{width: "10px", height: "10px", backgroundColor: color, borderRadius: "2px"}} />
-                <input value={teamNames[color] || ""} placeholder="부서명" onChange={(e) => setTeamNames({...teamNames, [color]: e.target.value})} style={teamInputS} onClick={(e) => e.stopPropagation()} />
+                <input value={teamNames[color] || ""} placeholder="부서명" onChange={(e) => setTeamNames({...teamNames, [color]: e.target.value})} style={teamInputS} />
               </div>
               <b style={{fontSize: "10px"}}>{count}석</b>
             </div>
@@ -203,6 +213,7 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
+      {/* 중앙 캔버스 */}
       <div style={{ flex: 1, padding: "20px", position: "relative" }}>
         <div ref={canvasRef} style={{...canvasS, backgroundColor: canvasBg}} 
           onMouseDown={(e) => {
@@ -251,6 +262,7 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
+      {/* 오른쪽 상세 설정 */}
       {isAdmin && (
         <div style={rightPanelS}>
           {firstSelected ? (
@@ -297,7 +309,7 @@ export default function SeatMapSystem() {
   );
 }
 
-// 스타일
+// --- 스타일 객체 ---
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f1f5f9", overflow: "hidden" };
 const sidebarS: any = { width: "220px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px", display: "flex", flexDirection: "column" };
 const rightPanelS: any = { width: "220px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "15px", overflowY: "auto" };
