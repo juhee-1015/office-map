@@ -6,7 +6,8 @@ import Draggable from "react-draggable";
 type ItemType = "seat" | "wall" | "door";
 interface RoomItem {
   id: number; type: ItemType; name: string; rotation: number;
-  color: string; textColor: string; opacity: number; width: number; height: number; x: number; y: number;
+  color: string; textColor: string; opacity: number; textOpacity: number;
+  width: number; height: number; x: number; y: number;
 }
 interface FloorInfo { id: string; displayName: string; items: RoomItem[]; }
 interface SavedVersion { id: string; name: string; date: string; data: FloorInfo[]; }
@@ -26,6 +27,7 @@ export default function SeatMapSystem() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [teamNames, setTeamNames] = useState<{ [key: string]: string }>({});
   const [savedVersions, setSavedVersions] = useState<SavedVersion[]>([]);
+  
   const palette = ["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#64748b", "#333333"];
 
   const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
@@ -39,6 +41,16 @@ export default function SeatMapSystem() {
   const selectedItems = useMemo(() => currentItems.filter(i => selectedIds.includes(i.id)), [currentItems, selectedIds]);
   const firstSelected = selectedItems[0];
 
+  // 부서별 통계 계산
+  const stats = useMemo(() => {
+    const seats = currentItems.filter(i => i.type === "seat");
+    const counts = seats.reduce((acc: any, cur) => {
+      acc[cur.color] = (acc[cur.color] || 0) + 1;
+      return acc;
+    }, {});
+    return { total: seats.length, counts };
+  }, [currentItems]);
+
   const updateItems = (newItems: RoomItem[]) => {
     setFloors(prev => prev.map(f => f.id === activeFloorId ? { ...f, items: newItems } : f));
   };
@@ -48,7 +60,7 @@ export default function SeatMapSystem() {
     const newItem: RoomItem = {
       id, type, name: type === "seat" ? "새 좌석" : "", rotation: 0,
       color: type === "seat" ? "#3b82f6" : type === "wall" ? "#333333" : "#e2e8f0",
-      textColor: "#ffffff", opacity: 1, width: type === "wall" ? 120 : 45, height: type === "wall" ? 8 : 45, x: 100, y: 100
+      textColor: "#ffffff", opacity: 1, textOpacity: 1, width: type === "wall" ? 120 : 45, height: type === "wall" ? 8 : 45, x: 100, y: 100
     };
     updateItems([...currentItems, newItem]);
     setSelectedIds([id]);
@@ -92,11 +104,11 @@ export default function SeatMapSystem() {
           <div style={modalContentS}>
             <h3 style={{marginBottom: "15px", fontWeight: "bold"}}>{modalType === "confirm" ? "삭제 확인" : "정보 입력"}</h3>
             {(modalType === "login" || modalType === "saveVersion" || modalType === "changePw") && (
-              <input type={modalType === "changePw" ? "text" : "password"} value={modalInput} onChange={(e) => setModalInput(e.target.value)} style={modalInputS} autoFocus />
+              <input type={modalType === "changePw" ? "text" : "password"} value={modalInput} onChange={(e) => setModalInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleModalConfirm()} style={modalInputS} autoFocus placeholder="내용을 입력하고 엔터를 치세요" />
             )}
             {(modalType === "confirm" || modalType === "alert") && <p>{modalMsg}</p>}
             <div style={{display: "flex", gap: "10px", justifyContent: "center", marginTop: "20px"}}>
-              <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인</button>
+              <button onClick={handleModalConfirm} style={adminBtnS(true)}>확인 (Enter)</button>
               <button onClick={() => setModalType(null)} style={subBtnS}>취소</button>
             </div>
           </div>
@@ -108,28 +120,54 @@ export default function SeatMapSystem() {
         {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{fontWeight: "bold", fontSize: "16px", marginBottom: "20px"}}>{appTitle}</h2>}
         
         <div style={{marginBottom: "20px"}}>
-          <label style={labelS}>층 관리 (이름 직접 수정)</label>
-          {floors.map(f => (
-            <div key={f.id} style={{display: "flex", gap: "4px", marginBottom: "4px"}}>
-              <button onClick={() => setActiveFloorId(f.id)} style={floorBtnS(activeFloorId === f.id)}>{f.displayName}</button>
-              {isAdmin && <input value={f.displayName} onChange={(e) => setFloors(floors.map(it => it.id === f.id ? {...it, displayName: e.target.value} : it))} style={floorInputS} />}
+          <label style={labelS}>층 이동</label>
+          <div style={{display: "flex", flexWrap: "wrap", gap: "5px"}}>
+            {floors.map(f => (
+              <button key={f.id} onClick={() => setActiveFloorId(f.id)} style={floorBtnS(activeFloorId === f.id)}>{f.displayName}</button>
+            ))}
+          </div>
+          {isAdmin && (
+             <div style={{marginTop: "10px", padding: "10px", backgroundColor: "#f8fafc", borderRadius: "8px"}}>
+                <label style={labelS}>층 이름 편집</label>
+                {floors.map(f => (
+                  <input key={f.id} value={f.displayName} onChange={(e) => setFloors(floors.map(it => it.id === f.id ? {...it, displayName: e.target.value} : it))} style={{...inputS, marginBottom: "4px"}} />
+                ))}
+                <button onClick={() => setFloors([...floors, { id: `F${Date.now()}`, displayName: "새 층", items: [] }])} style={addFloorBtnS}>+ 새로운 층 추가</button>
+             </div>
+          )}
+        </div>
+
+        {/* 부서 및 통계 */}
+        <div style={statsCardS}>
+          <div style={{fontWeight: "bold", borderBottom: "1px solid #eee", paddingBottom: "5px", marginBottom: "8px"}}>📊 좌석 통계 (총 {stats.total}석)</div>
+          {Object.keys(stats.counts).length === 0 && <div style={{fontSize: "11px", color: "#94a3b8"}}>배치된 좌석이 없습니다.</div>}
+          {Object.entries(stats.counts).map(([color, count]: any) => (
+            <div key={color} style={teamRowS}>
+              <div style={{display: "flex", alignItems: "center", gap: "6px"}}>
+                <div style={{width: "12px", height: "12px", backgroundColor: color, borderRadius: "2px"}} />
+                {isAdmin ? (
+                  <input value={teamNames[color] || ""} placeholder="부서명 지정" onChange={(e) => setTeamNames({...teamNames, [color]: e.target.value})} style={teamInputS} />
+                ) : (
+                  <span style={{fontSize: "12px"}}>{teamNames[color] || "미지정 부서"}</span>
+                )}
+              </div>
+              <b style={{fontSize: "12px"}}>{count}석</b>
             </div>
           ))}
-          {isAdmin && <button onClick={() => setFloors([...floors, { id: `F${Date.now()}`, displayName: "새 층", items: [] }])} style={addFloorBtnS}>층 추가</button>}
         </div>
 
         {isAdmin && (
           <div style={{marginBottom: "20px"}}>
-            <label style={labelS}>배치 히스토리</label>
+            <label style={labelS}>히스토리</label>
             <div style={versionListS}>
               {savedVersions.map(v => (
                 <div key={v.id} onClick={() => setFloors(v.data)} style={versionItemS}>
                   <div style={{flex: 1}}><b>{v.name}</b><br/><small>{v.date}</small></div>
-                  <button onClick={(e) => { e.stopPropagation(); setSavedVersions(savedVersions.filter(sv => sv.id !== v.id)); }} style={{color: "#ef4444", border: "none", background: "none", cursor: "pointer"}}>삭제</button>
+                  <button onClick={(e) => { e.stopPropagation(); setSavedVersions(savedVersions.filter(sv => sv.id !== v.id)); }} style={{color: "#ef4444", border: "none", background: "none", cursor: "pointer"}}>×</button>
                 </div>
               ))}
             </div>
-            <button onClick={() => setModalType("saveVersion")} style={saveVerBtnS}>버전 저장</button>
+            <button onClick={() => setModalType("saveVersion")} style={saveVerBtnS}>현재 배치 저장</button>
           </div>
         )}
 
@@ -163,22 +201,26 @@ export default function SeatMapSystem() {
           if (dragStart && dragEnd) {
             const left = Math.min(dragStart.x, dragEnd.x); const right = Math.max(dragStart.x, dragEnd.x);
             const top = Math.min(dragStart.y, dragEnd.y); const bottom = Math.max(dragStart.y, dragEnd.y);
-            setSelectedIds(currentItems.filter(i => i.x >= left && i.x <= right && i.y >= top && i.y <= bottom).map(i => i.id));
+            const inRange = currentItems.filter(i => i.x >= left && i.x <= right && i.y >= top && i.y <= bottom).map(i => i.id);
+            if(inRange.length > 0) setSelectedIds(inRange);
           }
           setDragStart(null); setDragEnd(null);
         }}>
           {currentItems.map((item) => (
-            <Draggable key={item.id} position={{ x: item.x, y: item.y }} onStart={() => !selectedIds.includes(item.id) && setSelectedIds([item.id])} onDrag={(e, data) => {
+            <Draggable key={item.id} position={{ x: item.x, y: item.y }} onStart={() => { if(!selectedIds.includes(item.id)) setSelectedIds([item.id]); }} onDrag={(e, data) => {
               const dx = data.x - item.x; const dy = data.y - item.y;
               updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, x: i.x + dx, y: i.y + dy } : i));
             }} disabled={!isAdmin}>
-              <div style={{ position: "absolute", zIndex: selectedIds.includes(item.id) ? 100 : 10, transform: `rotate(${item.rotation}deg)` }}>
+              <div style={{ position: "absolute", zIndex: selectedIds.includes(item.id) ? 100 : 10, cursor: isAdmin ? "move" : "default" }}>
                 <div style={{ 
-                  width: item.width, height: item.height, backgroundColor: item.color, opacity: item.opacity,
+                  transform: `rotate(${item.rotation}deg)`, width: item.width, height: item.height, 
+                  backgroundColor: item.color, opacity: item.opacity,
                   border: selectedIds.includes(item.id) ? "2px solid #2563eb" : item.type === "wall" ? "none" : "1px solid #ddd",
                   borderRadius: item.type === "seat" ? "4px" : "0", display: "flex", alignItems: "center", justifyContent: "center",
-                  color: item.textColor, fontSize: "11px", fontWeight: "bold", textAlign: "center", pointerEvents: "auto"
-                }}>{item.name}</div>
+                  color: item.textColor, fontSize: "11px", fontWeight: "bold", textAlign: "center"
+                }}>
+                  <span style={{opacity: item.textOpacity}}>{item.name}</span>
+                </div>
               </div>
             </Draggable>
           ))}
@@ -191,30 +233,38 @@ export default function SeatMapSystem() {
       {/* 오른쪽 상세 설정 */}
       {isAdmin && (
         <div style={rightPanelS}>
-          <h2 style={{fontSize: "14px", fontWeight: "bold", marginBottom: "15px"}}>항목 설정</h2>
+          <h2 style={{fontSize: "14px", fontWeight: "bold", marginBottom: "15px"}}>항목 상세 설정</h2>
           {firstSelected ? (
             <div style={{display: "flex", flexDirection: "column", gap: "10px"}}>
               <div style={propCardS}>
-                <label style={labelS}>이름 / 부서</label>
+                <label style={labelS}>이름 / 텍스트</label>
                 <input value={firstSelected.name} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, name: e.target.value} : i))} style={inputS} />
+              </div>
+
+              <div style={propCardS}>
+                <label style={labelS}>크기 수정 (W / H)</label>
+                <div style={{display: "flex", gap: "5px"}}>
+                  <input type="number" value={firstSelected.width} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, width: +e.target.value} : i))} style={inputS} />
+                  <input type="number" value={firstSelected.height} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, height: +e.target.value} : i))} style={inputS} />
+                </div>
               </div>
               
               <div style={propCardS}>
-                <label style={labelS}>배경색 (10색 + 스포이드)</label>
+                <label style={labelS}>배경 색상 및 투명도</label>
                 <div style={paletteS}>
                   {palette.map(c => <div key={c} onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, color: c} : i))} style={{...paletteItemS, backgroundColor: c, border: firstSelected.color === c ? "2px solid #000" : "1px solid #ddd"}} />)}
                   <input type="color" value={firstSelected.color} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, color: e.target.value} : i))} style={colorPickerS} />
                 </div>
-                <label style={{...labelS, marginTop: "10px"}}>배경 투명도: {Math.round(firstSelected.opacity * 100)}%</label>
-                <input type="range" min="0.1" max="1" step="0.1" value={firstSelected.opacity} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, opacity: +e.target.value} : i))} style={{width: "100%"}} />
+                <input type="range" min="0" max="1" step="0.1" value={firstSelected.opacity} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, opacity: +e.target.value} : i))} style={{width: "100%", marginTop: "10px"}} />
               </div>
 
               <div style={propCardS}>
-                <label style={labelS}>글자색 설정</label>
-                <div style={{display: "flex", gap: "5px"}}>
+                <label style={labelS}>글자 색상 및 투명도</label>
+                <div style={{display: "flex", gap: "5px", marginBottom: "8px"}}>
                   {["#ffffff", "#000000", "#ff0000"].map(c => <button key={c} onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, textColor: c} : i))} style={{flex: 1, backgroundColor: c, height: "20px", border: "1px solid #ddd"}} />)}
-                  <input type="color" value={firstSelected.textColor} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, textColor: e.target.value} : i))} style={{width: "20px", height: "20px"}} />
+                  <input type="color" value={firstSelected.textColor} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, textColor: e.target.value} : i))} style={{width: "25px", height: "20px"}} />
                 </div>
+                <input type="range" min="0" max="1" step="0.1" value={firstSelected.textOpacity} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, textOpacity: +e.target.value} : i))} style={{width: "100%"}} />
               </div>
 
               <div style={propCardS}>
@@ -222,44 +272,46 @@ export default function SeatMapSystem() {
                 <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px"}}>
                   <button onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, rotation: (i.rotation + 90) % 360} : i))} style={utilBtnS}>90° 회전</button>
                   <button onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, rotation: (i.rotation + 180) % 360} : i))} style={utilBtnS}>180° 회전</button>
-                  <button onClick={copySelected} style={{...utilBtnS, gridColumn: "span 2", backgroundColor: "#f0fdf4"}}>선택 항목 복제</button>
+                  <button onClick={copySelected} style={{...utilBtnS, gridColumn: "span 2", backgroundColor: "#f0fdf4"}}>선택 항목들 복제</button>
                 </div>
               </div>
 
-              <button onClick={() => { setModalMsg("선택한 항목을 삭제하시겠습니까?"); setModalType("confirm"); }} style={deleteBtnS}>선택 삭제</button>
+              <button onClick={() => { setModalMsg("선택한 항목들을 삭제하시겠습니까?"); setModalType("confirm"); }} style={deleteBtnS}>선택 항목 삭제</button>
             </div>
-          ) : <p style={{color: "#94a3b8", fontSize: "12px", textAlign: "center", marginTop: "50px"}}>항목을 선택해주세요.</p>}
-          <button onClick={() => setModalType("changePw")} style={pwBtnS}>관리자 비번 변경</button>
+          ) : <p style={{color: "#94a3b8", fontSize: "12px", textAlign: "center", marginTop: "50px"}}>항목을 다중 드래그하거나<br/>클릭하여 선택하세요.</p>}
+          <button onClick={() => setModalType("changePw")} style={pwBtnS}>관리자 비밀번호 변경</button>
         </div>
       )}
     </main>
   );
 }
 
-// 스타일 시트
-const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f8fafc", overflow: "hidden" };
+// 스타일
+const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f1f5f9", overflow: "hidden" };
 const sidebarS: any = { width: "260px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "20px", display: "flex", flexDirection: "column" };
-const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", display: "flex", flexDirection: "column" };
-const canvasS: any = { width: "100%", height: "100%", backgroundColor: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden" };
-const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000 };
-const modalContentS: any = { backgroundColor: "#fff", padding: "30px", borderRadius: "15px", width: "320px", textAlign: "center" };
-const modalInputS: any = { width: "100%", padding: "10px", border: "1px solid #ddd", borderRadius: "6px", marginBottom: "10px" };
-const adminBtnS: any = (adm: boolean) => ({ padding: "10px 20px", backgroundColor: adm ? "#1e293b" : "#2563eb", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold" });
-const subBtnS: any = { padding: "10px 20px", border: "1px solid #ddd", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer" };
-const actionBtnS: any = (bg: string, co: string) => ({ padding: "12px", backgroundColor: bg, color: co, border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" });
-const floorBtnS: any = (act: boolean) => ({ flex: 1, padding: "8px", backgroundColor: act ? "#2563eb" : "#f1f5f9", color: act ? "#fff" : "#64748b", border: "none", borderRadius: "6px", cursor: "pointer", fontWeight: "bold" });
-const floorInputS: any = { width: "60px", padding: "4px", border: "1px solid #eee", borderRadius: "4px", fontSize: "11px" };
-const titleEditS: any = { fontSize: "16px", fontWeight: "bold", border: "1px solid #2563eb", borderRadius: "4px", width: "100%", marginBottom: "20px", padding: "8px" };
-const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "4px" };
-const paletteItemS: any = { height: "20px", borderRadius: "3px", cursor: "pointer" };
-const colorPickerS: any = { width: "100%", height: "20px", padding: "0", border: "none", cursor: "pointer", gridColumn: "span 2" };
-const propCardS: any = { padding: "12px", border: "1px solid #f1f5f9", borderRadius: "8px", backgroundColor: "#fff" };
-const labelS: any = { fontSize: "11px", color: "#94a3b8", fontWeight: "bold", marginBottom: "5px", display: "block" };
-const inputS: any = { width: "100%", padding: "8px", border: "1px solid #ddd", borderRadius: "6px", fontSize: "12px" };
-const utilBtnS: any = { padding: "8px", backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "11px", cursor: "pointer", fontWeight: "bold" };
-const deleteBtnS: any = { padding: "12px", backgroundColor: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "13px" };
-const versionListS: any = { maxHeight: "100px", overflowY: "auto", border: "1px solid #eee", padding: "5px", borderRadius: "5px", marginBottom: "5px" };
-const versionItemS: any = { display: "flex", alignItems: "center", padding: "6px", borderBottom: "1px solid #f9f9f9", cursor: "pointer", fontSize: "11px" };
-const saveVerBtnS: any = { width: "100%", padding: "6px", background: "#f1f5f9", border: "none", borderRadius: "4px", fontSize: "11px", cursor: "pointer" };
-const addFloorBtnS: any = { width: "100%", padding: "6px", border: "1px dashed #ddd", background: "none", borderRadius: "6px", color: "#94a3b8", cursor: "pointer", fontSize: "11px", marginTop: "5px" };
-const pwBtnS: any = { background: "none", border: "none", color: "#94a3b8", fontSize: "10px", cursor: "pointer", textDecoration: "underline", marginTop: "auto" };
+const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", overflowY: "auto" };
+const canvasS: any = { width: "100%", height: "100%", backgroundColor: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden", boxShadow: "inset 0 2px 4px rgba(0,0,0,0.05)" };
+const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.6)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000 };
+const modalContentS: any = { backgroundColor: "#fff", padding: "30px", borderRadius: "20px", width: "340px", textAlign: "center", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" };
+const modalInputS: any = { width: "100%", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "10px", marginBottom: "15px", textAlign: "center" };
+const adminBtnS: any = (adm: boolean) => ({ padding: "12px 20px", backgroundColor: adm ? "#1e293b" : "#2563eb", color: "#fff", border: "none", borderRadius: "10px", cursor: "pointer", fontWeight: "bold" });
+const subBtnS: any = { padding: "12px 20px", border: "1px solid #e2e8f0", borderRadius: "10px", backgroundColor: "#fff", cursor: "pointer" };
+const actionBtnS: any = (bg: string, co: string) => ({ padding: "14px", backgroundColor: bg, color: co, border: "none", borderRadius: "10px", fontWeight: "bold", cursor: "pointer", fontSize: "12px" });
+const floorBtnS: any = (act: boolean) => ({ padding: "8px 12px", backgroundColor: act ? "#2563eb" : "#f1f5f9", color: act ? "#fff" : "#64748b", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "bold", fontSize: "12px" });
+const statsCardS: any = { padding: "15px", backgroundColor: "#f8fafc", borderRadius: "12px", marginBottom: "20px", border: "1px solid #e2e8f0" };
+const teamRowS: any = { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" };
+const teamInputS: any = { border: "none", borderBottom: "1px solid #ddd", fontSize: "11px", backgroundColor: "transparent", width: "80px" };
+const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "5px" };
+const paletteItemS: any = { height: "24px", borderRadius: "4px", cursor: "pointer" };
+const colorPickerS: any = { width: "100%", height: "24px", padding: "0", border: "none", cursor: "pointer", gridColumn: "span 2" };
+const propCardS: any = { padding: "12px", border: "1px solid #f1f5f9", borderRadius: "10px", backgroundColor: "#fff", boxShadow: "0 1px 2px rgba(0,0,0,0.05)" };
+const labelS: any = { fontSize: "11px", color: "#94a3b8", fontWeight: "bold", marginBottom: "6px", display: "block" };
+const inputS: any = { width: "100%", padding: "8px", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "12px" };
+const utilBtnS: any = { padding: "10px", backgroundColor: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "11px", cursor: "pointer", fontWeight: "bold" };
+const deleteBtnS: any = { padding: "14px", backgroundColor: "#fff1f2", color: "#e11d48", border: "1px solid #fecdd3", borderRadius: "10px", cursor: "pointer", fontWeight: "bold", fontSize: "13px", marginTop: "10px" };
+const titleEditS: any = { fontSize: "18px", fontWeight: "bold", border: "2px solid #2563eb", borderRadius: "8px", width: "100%", marginBottom: "20px", padding: "10px" };
+const versionListS: any = { maxHeight: "120px", overflowY: "auto", border: "1px solid #e2e8f0", padding: "8px", borderRadius: "8px", marginBottom: "8px" };
+const versionItemS: any = { display: "flex", alignItems: "center", padding: "8px", borderBottom: "1px solid #f8fafc", cursor: "pointer", fontSize: "11px" };
+const saveVerBtnS: any = { width: "100%", padding: "8px", background: "#f1f5f9", border: "none", borderRadius: "8px", fontSize: "12px", cursor: "pointer", fontWeight: "bold" };
+const addFloorBtnS: any = { width: "100%", padding: "8px", border: "1px dashed #cbd5e1", background: "none", borderRadius: "8px", color: "#64748b", cursor: "pointer", fontSize: "12px", marginTop: "8px", fontWeight: "bold" };
+const pwBtnS: any = { background: "none", border: "none", color: "#cbd5e1", fontSize: "10px", cursor: "pointer", textDecoration: "underline", marginTop: "20px", textAlign: "center", width: "100%" };
