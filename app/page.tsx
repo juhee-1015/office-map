@@ -3,31 +3,40 @@
 import React, { useState, useEffect } from "react";
 import Draggable from "react-draggable";
 
-export default function OfficeMap() {
+export default function Page() {
   const [mounted, setMounted] = useState(false);
-  const [items, setItems] = useState([
-    { id: 1, name: "사장님", x: 100, y: 100, color: "#ef4444" },
-    { id: 2, name: "나", x: 200, y: 100, color: "#3b82f6" },
-  ]);
+  
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
-  useEffect(() => { setMounted(true); }, []);
-  if (!mounted) return null;
+  if (!mounted) return <div style={{ padding: "20px" }}>로딩 중...</div>;
 
   return (
-    <div style={{ padding: "20px", background: "#f8fafc", height: "100vh" }}>
-      <h2>사무실 배치도 (드래그 가능)</h2>
-      <div style={{ width: "100%", height: "80vh", background: "#fff", border: "1px solid #ddd", position: "relative" }}>
-        {items.map((item) => (
-          <Draggable key={item.id} defaultPosition={{ x: item.x, y: item.y }}>
-            <div style={{
-              width: "60px", height: "60px", backgroundColor: item.color, color: "#fff",
-              borderRadius: "10px", display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "move", position: "absolute", fontWeight: "bold"
-            }}>
-              {item.name}
-            </div>
-          </Draggable>
-        ))}
+    <div style={{ padding: "40px", backgroundColor: "#f0f2f5", height: "100vh" }}>
+      <h1 style={{ color: "#1a1a1a" }}>우리 회사 배치도 테스트</h1>
+      <p>좌석을 마우스로 드래그해 보세요!</p>
+      
+      <div style={{ width: "100%", height: "500px", background: "white", border: "2px dashed #ccc", position: "relative" }}>
+        <Draggable defaultPosition={{x: 50, y: 50}}>
+          <div style={{ 
+            width: "80px", height: "80px", backgroundColor: "#3b82f6", 
+            color: "white", display: "flex", alignItems: "center", 
+            justifyContent: "center", borderRadius: "10px", cursor: "move" 
+          }}>
+            좌석 1
+          </div>
+        </Draggable>
+
+        <Draggable defaultPosition={{x: 150, y: 50}}>
+          <div style={{ 
+            width: "80px", height: "80px", backgroundColor: "#ef4444", 
+            color: "white", display: "flex", alignItems: "center", 
+            justifyContent: "center", borderRadius: "10px", cursor: "move" 
+          }}>
+            좌석 2
+          </div>
+        </Draggable>
       </div>
     </div>
   );
