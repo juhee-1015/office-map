@@ -25,12 +25,29 @@ export default function SeatMapSystem() {
   const [teamNames, setTeamNames] = useState<{ [key: string]: string }>({});
   const [customPalette, setCustomPalette] = useState<string[]>(["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16", "#64748b", "#78350f"]);
 
-  // --- 드래그 영역 선택을 위한 상태 ---
   const [dragStart, setDragStart] = useState<{ x: number, y: number } | null>(null);
   const [dragEnd, setDragEnd] = useState<{ x: number, y: number } | null>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setHasMounted(true); }, []);
+
+  // --- 키보드 삭제(Delete) 기능 추가 ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isAdmin || selectedIds.length === 0) return;
+      // 입력창(input)에서 글자 지울 때는 작동 안하게 방어
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      if (e.key === "Delete" || e.key === "Backspace") {
+        if (confirm(`선택한 ${selectedIds.length}개 항목을 삭제하시겠습니까?`)) {
+          updateItems(currentItems.filter(i => !selectedIds.includes(i.id)));
+          setSelectedIds([]);
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isAdmin, selectedIds, activeFloorId, floors]);
 
   const currentFloor = useMemo(() => floors.find(f => f.id === activeFloorId) || floors[0], [floors, activeFloorId]);
   const currentItems = currentFloor.items;
@@ -57,10 +74,10 @@ export default function SeatMapSystem() {
     } else if (modalType === "error") { setModalType("login"); }
   };
 
-  // 영역 선택 로직
+  // 영역 선택
   const onCanvasMouseDown = (e: React.MouseEvent) => {
     if (!isAdmin) return;
-    if (e.target !== canvasRef.current) return; // 아이템 클릭 시에는 무시
+    if (e.target !== canvasRef.current) return;
     const rect = canvasRef.current.getBoundingClientRect();
     setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
     setDragEnd({ x: e.clientX - rect.left, y: e.clientY - rect.top });
@@ -75,16 +92,13 @@ export default function SeatMapSystem() {
 
   const onCanvasMouseUp = () => {
     if (!dragStart || !dragEnd) { setDragStart(null); setDragEnd(null); return; }
-    
     const x1 = Math.min(dragStart.x, dragEnd.x);
     const y1 = Math.min(dragStart.y, dragEnd.y);
     const x2 = Math.max(dragStart.x, dragEnd.x);
     const y2 = Math.max(dragStart.y, dragEnd.y);
-
     const newlySelected = currentItems.filter(item => 
       item.x >= x1 && item.x <= x2 && item.y >= y1 && item.y <= y2
     ).map(i => i.id);
-
     setSelectedIds(newlySelected);
     setDragStart(null);
     setDragEnd(null);
@@ -95,7 +109,6 @@ export default function SeatMapSystem() {
     if (!target) return;
     const dx = data.x - target.x;
     const dy = data.y - target.y;
-
     if (selectedIds.includes(id)) {
       updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, x: i.x + dx, y: i.y + dy } : i));
     } else {
@@ -104,12 +117,17 @@ export default function SeatMapSystem() {
     }
   };
 
+  // 90도/180도 회전 로직 (안먹히던 문제 수정)
   const rotateItems = (deg: number) => {
     updateItems(currentItems.map(i => {
       if (selectedIds.includes(i.id)) {
-        const nextRotation = (i.rotation + deg) % 360;
-        if (deg === 90 || deg === 270) return { ...i, width: i.height, height: i.width, rotation: nextRotation };
-        return { ...i, rotation: nextRotation };
+        if (deg === 90) {
+          // 가로세로를 실제로 맞바꿈
+          return { ...i, width: i.height, height: i.width, rotation: (i.rotation + 90) % 360 };
+        } else {
+          // 180도는 각도만 회전
+          return { ...i, rotation: (i.rotation + 180) % 360 };
+        }
       }
       return i;
     }));
@@ -120,7 +138,6 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
-      {/* 모달 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
@@ -134,10 +151,8 @@ export default function SeatMapSystem() {
         </div>
       )}
 
-      {/* 왼쪽 사이드바 */}
       <div style={sidebarS}>
         {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{ fontSize: "16px", fontWeight: "bold", marginBottom: "20px" }}>{appTitle}</h2>}
-        
         {isAdmin && (
           <div style={statsCardS}>
             <p style={{ fontSize: "11px", color: "#6366f1", marginBottom: "8px", fontWeight: "600" }}>💡 부서 색상 클릭 시 그룹 선택</p>
@@ -150,7 +165,6 @@ export default function SeatMapSystem() {
             ))}
           </div>
         )}
-
         <div style={{ marginBottom: "20px" }}>
           <label style={labelS}>층 관리</label>
           {floors.map(f => (
@@ -161,7 +175,6 @@ export default function SeatMapSystem() {
           ))}
           {isAdmin && <button onClick={() => setFloors([...floors, { id: `F${Date.now()}`, displayName: `${floors.length+1}층`, items: [] }])} style={addFloorBtnS}>+ 층 추가</button>}
         </div>
-
         <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: "8px" }}>
           {isAdmin && <button onClick={() => setModalType("changePw")} style={pwBtnS}>비밀번호 변경</button>}
           <button onClick={() => isAdmin ? setIsAdmin(false) : setModalType("login")} style={adminBtnS(isAdmin)}>{isAdmin ? "편집 종료" : "관리자 로그인"}</button>
@@ -177,34 +190,18 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
-      {/* 중앙 도면 (드래그 선택 로직 추가) */}
       <div style={{ flex: 1, padding: "20px" }}>
-        <div 
-          ref={canvasRef}
-          style={canvasS} 
-          onMouseDown={onCanvasMouseDown}
-          onMouseMove={onCanvasMouseMove}
-          onMouseUp={onCanvasMouseUp}
-        >
+        <div ref={canvasRef} style={canvasS} onMouseDown={onCanvasMouseDown} onMouseMove={onCanvasMouseMove} onMouseUp={onCanvasMouseUp}>
           <div style={{ ...gridOverlayS, display: isAdmin ? "block" : "none" }} />
-          
-          {/* 영역 선택 박스 */}
           {dragStart && dragEnd && (
-            <div style={{
-              position: "absolute", zIndex: 999, border: "1px solid #2563eb", backgroundColor: "rgba(37, 99, 235, 0.1)",
-              left: Math.min(dragStart.x, dragEnd.x), top: Math.min(dragStart.y, dragEnd.y),
-              width: Math.abs(dragStart.x - dragEnd.x), height: Math.abs(dragStart.y - dragEnd.y),
-              pointerEvents: "none"
-            }} />
+            <div style={{ position: "absolute", zIndex: 999, border: "1px solid #2563eb", backgroundColor: "rgba(37, 99, 235, 0.1)", left: Math.min(dragStart.x, dragEnd.x), top: Math.min(dragStart.y, dragEnd.y), width: Math.abs(dragStart.x - dragEnd.x), height: Math.abs(dragStart.y - dragEnd.y), pointerEvents: "none" }} />
           )}
-
           {currentItems.map((item) => (
             <DraggableComponent key={item.id} item={item} isSelected={selectedIds.includes(item.id)} isAdmin={isAdmin} onSelect={() => { if(!selectedIds.includes(item.id)) setSelectedIds([item.id]); }} onDrag={(data:any) => handleDrag(item.id, data)} />
           ))}
         </div>
       </div>
 
-      {/* 오른쪽 설정 */}
       {isAdmin && (
         <div style={rightPanelS}>
           <h2 style={{ fontSize: "14px", fontWeight: "bold", marginBottom: "15px" }}>상세 설정</h2>
@@ -214,7 +211,7 @@ export default function SeatMapSystem() {
                 <label style={labelS}>부서 및 색상 (팔레트)</label>
                 <div style={{ display: "flex", gap: "5px", marginBottom: "8px" }}>
                   <input type="color" value={selectedItem.color} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, color: e.target.value } : i))} style={{ flex: 1, height: "30px", border: "none", cursor: "pointer" }} />
-                  <button onClick={() => setCustomPalette([...customPalette, selectedItem.color])} style={smallBtnS}>추가</button>
+                  <button onClick={() => setCustomPalette([...customPalette, selectedItem.color])} style={smallBtnS}>저장</button>
                 </div>
                 <input value={teamNames[selectedItem.color] || ""} onChange={(e) => setTeamNames({...teamNames, [selectedItem.color]: e.target.value})} style={inputS} placeholder="부서 이름 입력" />
                 <div style={paletteS}>
@@ -222,7 +219,7 @@ export default function SeatMapSystem() {
                 </div>
               </div>
               <div style={propCardS}>
-                <label style={labelS}>배치 도구</label>
+                <label style={labelS}>배치 도구 (키보드 Del키로 삭제 가능)</label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" }}>
                   <button onClick={() => rotateItems(90)} style={toolBtn}>90° 회전</button>
                   <button onClick={() => rotateItems(180)} style={toolBtn}>180° 회전</button>
@@ -239,9 +236,9 @@ export default function SeatMapSystem() {
                   <input type="number" value={selectedItem.height} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, height: +e.target.value } : i))} style={inputS} />
                 </div>
               </div>
-              <button onClick={() => { updateItems(currentItems.filter(i => !selectedIds.includes(i.id))); setSelectedIds([]); }} style={deleteBtnS}>항목 삭제</button>
+              <button onClick={() => { if(confirm("삭제하시겠습니까?")) { updateItems(currentItems.filter(i => !selectedIds.includes(i.id))); setSelectedIds([]); } }} style={deleteBtnS}>항목 삭제</button>
             </div>
-          ) : <div style={{ textAlign: "center", color: "#94a3b8", marginTop: "50px" }}>선택된 항목이 없습니다.</div>}
+          ) : <div style={{ textAlign: "center", color: "#94a3b8", marginTop: "50px" }}>아이템을 드래그하여<br/>선택해 보세요.</div>}
         </div>
       )}
     </main>
@@ -264,9 +261,9 @@ function DraggableComponent({ item, isSelected, isAdmin, onSelect, onDrag }: any
         <div style={{ 
           width: item.width, height: item.height, backgroundColor: item.type === "door" ? "transparent" : item.color, 
           border: isSelected ? "2px solid #2563eb" : (item.type === "wall" ? "none" : "1px solid rgba(0,0,0,0.1)"), 
-          ...(item.type === "door" && { border: "none" }), borderRadius: item.type === "seat" ? "6px" : "0", 
+          ...(item.type === "door" && { border: "none" }), borderRadius: item.type === "seat" ? "4px" : "0", 
           transform: `rotate(${item.rotation}deg)`, display: "flex", alignItems: "center", justifyContent: "center",
-          transition: "transform 0.2s"
+          transition: "transform 0.1s"
         }}>
           {item.type === "seat" && (
             <span style={{ fontSize: "10px", color: "#fff", fontWeight: "bold", pointerEvents: "none" }}>{item.name}</span>
@@ -278,7 +275,7 @@ function DraggableComponent({ item, isSelected, isAdmin, onSelect, onDrag }: any
   );
 }
 
-// 스타일 시트 (기존 동일)
+// 스타일 시트
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f8fafc", fontFamily: "sans-serif", fontSize: "13px" };
 const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "20px", display: "flex", flexDirection: "column" };
 const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", overflowY: "auto" };
