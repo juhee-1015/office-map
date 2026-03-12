@@ -1,134 +1,135 @@
 "use client";
 
-import React, { useState, useRef, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import Draggable from "react-draggable";
 
-// --- 타입 정의 ---
-type ItemType = "seat" | "wall" | "door";
-interface RoomItem {
-  id: number; type: ItemType; name: string; rotation: number;
-  color: string; width: number; height: number; x: number; y: number;
-}
-interface FloorInfo { id: string; displayName: string; items: RoomItem[]; }
-
 export default function OfficeMapApp() {
-  const [hasMounted, setHasMounted] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [adminPassword, setAdminPassword] = useState("1234");
-  const [modalType, setModalType] = useState<"login" | null>(null);
-  const [modalInput, setModalInput] = useState("");
-  
-  const [floors, setFloors] = useState<FloorInfo[]>([{ id: "F1", displayName: "1층", items: [] }]);
-  const [activeFloorId, setActiveFloorId] = useState<string>("F1");
+  const [items, setItems] = useState<any[]>([]);
 
+  // 페이지 로드 시 저장된 데이터 불러오기
   useEffect(() => {
-    setHasMounted(true);
-    const saved = localStorage.getItem("office-data-v1");
+    setMounted(true);
+    const saved = localStorage.getItem("office-data-final");
     if (saved) {
-      const parsed = JSON.parse(saved);
-      setFloors(parsed.floors);
+      try {
+        setItems(JSON.parse(saved));
+      } catch (e) {
+        console.error("데이터 로드 실패", e);
+      }
     }
   }, []);
 
+  // 데이터 변경 시 로컬 저장소에 자동 저장
   useEffect(() => {
-    if (hasMounted) {
-      localStorage.setItem("office-data-v1", JSON.stringify({ floors }));
+    if (mounted) {
+      localStorage.setItem("office-data-final", JSON.stringify(items));
     }
-  }, [floors, hasMounted]);
+  }, [items, mounted]);
 
-  const currentFloor = useMemo(() => floors.find(f => f.id === activeFloorId) || floors[0], [floors, activeFloorId]);
-
-  const updateItems = (newItems: RoomItem[]) => {
-    setFloors(prev => prev.map(f => f.id === activeFloorId ? { ...f, items: newItems } : f));
-  };
-
-  const handleDrag = (id: number, data: { x: number, y: number }) => {
-    updateItems(currentFloor.items.map(item => item.id === id ? { ...item, x: data.x, y: data.y } : item));
-  };
-
-  const addItem = (type: ItemType) => {
-    const newItem: RoomItem = {
+  // 새로운 좌석 추가 함수
+  const addItem = () => {
+    const newItem = {
       id: Date.now(),
-      type,
-      name: type === "seat" ? "새 좌석" : "",
-      rotation: 0,
-      color: type === "seat" ? "#3b82f6" : "#334155",
-      width: type === "seat" ? 50 : 100,
-      height: type === "seat" ? 50 : 10,
-      x: 50, y: 50
+      name: `좌석 ${items.length + 1}`,
+      x: 50,
+      y: 50,
+      color: "#3b82f6"
     };
-    updateItems([...currentFloor.items, newItem]);
+    setItems([...items, newItem]);
   };
 
-  if (!hasMounted) return null;
+  // 좌석 삭제 함수
+  const deleteItem = (id: number) => {
+    if (confirm("이 좌석을 삭제할까요?")) {
+      setItems(items.filter(i => i.id !== id));
+    }
+  };
+
+  if (!mounted) return null;
 
   return (
-    <div style={{ display: "flex", height: "100vh", fontFamily: "sans-serif", backgroundColor: "#f8fafc" }}>
-      {/* 사이드바 */}
-      <div style={{ width: "260px", background: "#fff", borderRight: "1px solid #e2e8f0", padding: "20px", display: "flex", flexDirection: "column" }}>
-        <h2 style={{ fontSize: "18px", fontWeight: "bold", marginBottom: "20px" }}>사무실 배치도</h2>
+    <div style={{ display: "flex", height: "100vh", backgroundColor: "#f8fafc", fontFamily: "sans-serif" }}>
+      {/* 왼쪽 관리 도구 모음 */}
+      <div style={{ width: "260px", padding: "20px", background: "#fff", borderRight: "1px solid #e2e8f0", boxShadow: "2px 0 5px rgba(0,0,0,0.05)" }}>
+        <h2 style={{ fontSize: "20px", fontWeight: "bold", marginBottom: "20px", color: "#1e293b" }}>사무실 배치도</h2>
         
-        <div style={{ marginBottom: "20px" }}>
-          <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "8px" }}>층 선택</p>
-          {floors.map(f => (
-            <button key={f.id} onClick={() => setActiveFloorId(f.id)} style={{
-              width: "100%", padding: "10px", marginBottom: "5px", borderRadius: "8px", border: "none",
-              backgroundColor: activeFloorId === f.id ? "#2563eb" : "#f1f5f9",
-              color: activeFloorId === f.id ? "#fff" : "#64748b", cursor: "pointer"
-            }}>{f.displayName}</button>
-          ))}
-        </div>
+        <button 
+          onClick={() => setIsAdmin(!isAdmin)} 
+          style={{ 
+            width: "100%", padding: "12px", marginBottom: "15px", 
+            backgroundColor: isAdmin ? "#ef4444" : "#2563eb", 
+            color: "#fff", border: "none", borderRadius: "10px", 
+            cursor: "pointer", fontWeight: "bold", transition: "0.3s"
+          }}
+        >
+          {isAdmin ? "🛠 편집 종료" : "⚙️ 편집 모드 시작"}
+        </button>
 
-        <div style={{ marginTop: "auto" }}>
-          <button onClick={() => isAdmin ? setIsAdmin(false) : setModalType("login")} style={{
-            width: "100%", padding: "12px", borderRadius: "10px", border: "none",
-            backgroundColor: isAdmin ? "#ef4444" : "#1e293b", color: "#fff", cursor: "pointer", fontWeight: "bold"
-          }}>{isAdmin ? "편집 모드 종료" : "관리자 로그인"}</button>
-          
-          {isAdmin && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "10px" }}>
-              <button onClick={() => addItem("seat")} style={actionBtnS}>좌석 추가</button>
-              <button onClick={() => addItem("wall")} style={actionBtnS}>벽체 추가</button>
-            </div>
-          )}
-        </div>
+        {isAdmin && (
+          <div style={{ padding: "15px", backgroundColor: "#f1f5f9", borderRadius: "10px" }}>
+            <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "10px" }}>관리자 메뉴</p>
+            <button 
+              onClick={addItem} 
+              style={{ 
+                width: "100%", padding: "10px", backgroundColor: "#fff", 
+                border: "1px solid #cbd5e1", borderRadius: "8px", 
+                cursor: "pointer", fontWeight: "600", color: "#334155" 
+              }}
+            >
+              + 새 좌석 추가
+            </button>
+            <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "10px" }}>
+              * 좌석을 드래그해서 배치하세요.
+            </p>
+          </div>
+        )}
       </div>
 
-      {/* 도면 영역 */}
-      <div style={{ flex: 1, padding: "30px", overflow: "hidden" }}>
-        <div style={{ width: "100%", height: "100%", background: "#fff", borderRadius: "20px", border: "1px dashed #cbd5e1", position: "relative" }}>
-          {currentFloor.items.map(item => (
-            <Draggable key={item.id} position={{ x: item.x, y: item.y }} onDrag={(e, data) => handleDrag(item.id, data)} disabled={!isAdmin}>
-              <div style={{
-                position: "absolute", width: item.width, height: item.height, backgroundColor: item.color,
-                display: "flex", alignItems: "center", justifyContent: "center", borderRadius: item.type === "seat" ? "8px" : "2px",
-                color: "#fff", fontSize: "11px", fontWeight: "bold", cursor: isAdmin ? "move" : "default",
-                boxShadow: "0 2px 4px rgba(0,0,0,0.1)", transform: `rotate(${item.rotation}deg)`
-              }}>
+      {/* 오른쪽 실제 도면 영역 */}
+      <div style={{ flex: 1, padding: "40px", position: "relative", overflow: "hidden" }}>
+        <div style={{ 
+          width: "100%", height: "100%", background: "#fff", 
+          borderRadius: "20px", border: "2px dashed #cbd5e1", 
+          position: "relative", overflow: "auto",
+          backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)",
+          backgroundSize: "20px 20px"
+        }}>
+          {items.map((item) => (
+            <Draggable
+              key={item.id}
+              position={{ x: item.x, y: item.y }}
+              onDrag={(e, data) => {
+                setItems(items.map(i => i.id === item.id ? { ...i, x: data.x, y: data.y } : i));
+              }}
+              disabled={!isAdmin}
+            >
+              <div 
+                style={{ 
+                  position: "absolute", width: "60px", height: "60px", 
+                  backgroundColor: item.color, color: "#fff", 
+                  borderRadius: "12px", display: "flex", flexDirection: "column",
+                  alignItems: "center", justifyContent: "center", 
+                  fontSize: "12px", fontWeight: "bold",
+                  cursor: isAdmin ? "move" : "default", 
+                  boxShadow: "0 4px 6px -1px rgba(0,0,0,0.1)",
+                  userSelect: "none"
+                }}
+                onDoubleClick={() => isAdmin && deleteItem(item.id)}
+              >
                 {item.name}
               </div>
             </Draggable>
           ))}
+
+          {items.length === 0 && (
+            <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%", color: "#94a3b8" }}>
+              편집 모드를 켜고 좌석을 추가해 주세요.
+            </div>
+          )}
         </div>
       </div>
-
-      {/* 로그인 모달 */}
-      {modalType === "login" && (
-        <div style={modalOverlayS}>
-          <div style={modalContentS}>
-            <h3 style={{ marginBottom: "15px" }}>관리자 비밀번호</h3>
-            <input type="password" value={modalInput} onChange={e => setModalInput(e.target.value)} style={{ width: "100%", padding: "10px", marginBottom: "10px", border: "1px solid #ddd", borderRadius: "5px" }} />
-            <div style={{ display: "flex", gap: "5px" }}>
-              <button onClick={() => setModalType(null)} style={{ flex: 1, padding: "10px", background: "#f1f5f9", border: "none", borderRadius: "5px" }}>취소</button>
-              <button onClick={() => { if(modalInput === adminPassword) { setIsAdmin(true); setModalType(null); } else alert("비밀번호가 틀렸습니다."); setModalInput(""); }} style={{ flex: 1, padding: "10px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "5px" }}>확인</button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
-
-const actionBtnS = { padding: "10px", backgroundColor: "#eff6ff", color: "#2563eb", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "bold" as const };
-const modalOverlayS = { position: "fixed" as const, inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalContentS = { backgroundColor: "#fff", padding: "20px", borderRadius: "15px", width: "300px", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)" };
