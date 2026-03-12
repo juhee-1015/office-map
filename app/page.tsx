@@ -30,15 +30,22 @@ export default function SeatMapSystem() {
 
   useEffect(() => { setHasMounted(true); }, []);
 
+  // 삭제 로직 안정화
+  const deleteSelectedItems = () => {
+    if (selectedIds.length === 0) return;
+    if (window.confirm(`선택한 ${selectedIds.length}개 항목을 삭제하시겠습니까?`)) {
+      const currentFloorItems = currentItems.filter(i => !selectedIds.includes(i.id));
+      updateItems(currentFloorItems);
+      setSelectedIds([]);
+    }
+  };
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!isAdmin || selectedIds.length === 0) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if (e.key === "Delete" || e.key === "Backspace") {
-        if (confirm(`선택한 ${selectedIds.length}개 항목을 삭제하시겠습니까?`)) {
-          updateItems(currentItems.filter(i => !selectedIds.includes(i.id)));
-          setSelectedIds([]);
-        }
+        deleteSelectedItems();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -127,14 +134,12 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
-      {/* 비밀번호 모달 레이아웃 전면 수정 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
-            <h3 style={{ marginBottom: "20px", fontSize: "16px", fontWeight: "bold" }}>
+            <h3 style={{ marginBottom: "20px", fontSize: "16px", fontWeight: "bold", color: "#1e293b" }}>
               {modalType === "login" ? "관리자 인증" : "비밀번호 설정"}
             </h3>
-            {/* 내부 정렬용 컨테이너 추가 */}
             <div style={{ padding: "0 25px" }}>
               <input 
                 type="password" 
@@ -246,7 +251,7 @@ export default function SeatMapSystem() {
               </div>
               <div style={{marginTop: "10px"}}>
                 <p style={{fontSize: "11px", color: "#94a3b8", textAlign: "center", marginBottom: "5px"}}>💡 키보드 Del키로 삭제 가능</p>
-                <button onClick={() => { if(confirm("삭제하시겠습니까?")) { updateItems(currentItems.filter(i => !selectedIds.includes(i.id))); setSelectedIds([]); } }} style={deleteBtnS}>항목 삭제</button>
+                <button onClick={deleteSelectedItems} style={deleteBtnS}>항목 삭제</button>
               </div>
             </div>
           ) : <div style={{ textAlign: "center", color: "#94a3b8", marginTop: "50px" }}>아이템을 드래그하여<br/>선택해 보세요.</div>}
@@ -286,10 +291,10 @@ function DraggableComponent({ item, isSelected, isAdmin, onSelect, onDrag }: any
   );
 }
 
-// 스타일 시트 (모달 및 박스 사이징 수정)
+// 스타일 시트
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f8fafc", fontFamily: "sans-serif", fontSize: "13px" };
-const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px 20px", display: "flex", flexDirection: "column" };
-const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", overflowY: "auto" };
+const sidebarS: any = { width: "240px", backgroundColor: "#fff", borderRight: "1px solid #e2e8f0", padding: "15px 20px", display: "flex", flexDirection: "column", zIndex: 50 };
+const rightPanelS: any = { width: "260px", backgroundColor: "#fff", borderLeft: "1px solid #e2e8f0", padding: "20px", overflowY: "auto", zIndex: 50 };
 const canvasS: any = { width: "100%", height: "100%", backgroundColor: "#fff", borderRadius: "15px", border: "1px solid #e2e8f0", position: "relative", overflow: "hidden", cursor: "crosshair" };
 const inputS: any = { width: "100%", padding: "8px", border: "1px solid #e2e8f0", borderRadius: "6px", fontSize: "12px", outline: "none", boxSizing: "border-box" };
 const labelS: any = { fontSize: "11px", color: "#94a3b8", fontWeight: "bold", marginBottom: "5px", display: "block" };
@@ -303,8 +308,8 @@ const statsCardS: any = { padding: "12px", backgroundColor: "#f8fafc", borderRad
 const groupRowS: any = { display: "flex", justifyContent: "space-between", padding: "6px 0", cursor: "pointer" };
 const paletteS: any = { display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "4px", marginTop: "8px" };
 const paletteItemS: any = { height: "20px", borderRadius: "4px", cursor: "pointer" };
-const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.4)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 };
-const modalContentS: any = { backgroundColor: "#fff", padding: "30px 0", borderRadius: "20px", width: "320px", textAlign: "center", boxShadow: "0 20px 40px rgba(0,0,0,0.15)" };
+const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 10000 };
+const modalContentS: any = { backgroundColor: "#fff", padding: "30px 0", borderRadius: "20px", width: "320px", textAlign: "center", boxShadow: "0 20px 50px rgba(0,0,0,0.2)", boxSizing: "border-box" };
 const modalInputS: any = { width: "100%", padding: "12px", border: "1px solid #e2e8f0", borderRadius: "10px", fontSize: "14px", outline: "none", textAlign: "center", boxSizing: "border-box" };
 const subBtnS: any = { padding: "10px", border: "1px solid #e2e8f0", borderRadius: "8px", backgroundColor: "#fff", cursor: "pointer", width: "100%", fontWeight: "bold" };
 const gridOverlayS: any = { position: "absolute", inset: 0, backgroundImage: "radial-gradient(#e2e8f0 1px, transparent 1px)", backgroundSize: "20px 20px", pointerEvents: "none" };
