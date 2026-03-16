@@ -22,9 +22,10 @@ export default function SeatMapSystem() {
   const [activeFloorId, setActiveFloorId] = useState<string>("F1");
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [history, setHistory] = useState<FloorInfo[][]>([]);
-  const [customPalette] = useState<string[]>(["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6"]);
+  const [customPalette, setCustomPalette] = useState<string[]>(["#3b82f6", "#10b981", "#ef4444", "#f59e0b", "#8b5cf6"]);
 
-  const [modalType, setModalType] = useState<"login" | null>(null);
+  // 모달 상태
+  const [modalType, setModalType] = useState<"login" | "restoreConfirm" | null>(null);
   const [modalInput, setModalInput] = useState("");
 
   const canvasRef = useRef<HTMLDivElement>(null);
@@ -41,7 +42,7 @@ export default function SeatMapSystem() {
     setFloors(prev => prev.map(f => f.id === activeFloorId ? { ...f, items: newItems } : f));
   };
 
-  // ✅ 핵심 기능들 (삭제/추가/정렬/회전)
+  // ✅ [복구] 아이템 추가 함수 (에러 해결!)
   const addItem = (type: ItemType) => {
     saveHistory();
     const id = Date.now();
@@ -57,24 +58,27 @@ export default function SeatMapSystem() {
     setSelectedIds([id]);
   };
 
+  // ✅ [복구] 정렬 기능
   const alignObjects = (direction: 'horizontal' | 'vertical') => {
-    if (selectedIds.length < 2) return;
+    if (selectedItems.length < 2) return;
     saveHistory();
     if (direction === 'horizontal') {
-      const avgY = Math.round(selectedItems.reduce((acc, cur) => acc + cur.y, 0) / selectedItems.length / 10) * 10;
+      const avgY = selectedItems.reduce((acc, cur) => acc + cur.y, 0) / selectedItems.length;
       updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, y: avgY } : i));
     } else {
-      const avgX = Math.round(selectedItems.reduce((acc, cur) => acc + cur.x, 0) / selectedItems.length / 10) * 10;
+      const avgX = selectedItems.reduce((acc, cur) => acc + cur.x, 0) / selectedItems.length;
       updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, x: avgX } : i));
     }
   };
 
+  // ✅ [복구] 회전 기능
   const rotateObjects = (deg: number) => {
     if (selectedIds.length === 0) return;
     saveHistory();
     updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, rotation: (i.rotation + deg) % 360 } : i));
   };
 
+  // ✅ [복구] 전체 복제 기능
   const duplicateSelected = () => {
     if (selectedIds.length === 0) return;
     saveHistory();
@@ -93,11 +97,11 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
-      {/* 관리자 로그인 모달 */}
-      {modalType === "login" && (
+      {/* 모달 */}
+      {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
-            <h3 style={{marginBottom: "15px", fontWeight: "bold"}}>관리자 로그인</h3>
+            <h3 style={{marginBottom: "15px", fontWeight: "bold"}}>{modalType === "login" ? "관리자 로그인" : "데이터 복구"}</h3>
             <input type="password" value={modalInput} onChange={(e) => setModalInput(e.target.value)} onKeyDown={(e) => {
               if(e.key === 'Enter') {
                 if(modalInput === adminPassword) setIsAdmin(true);
@@ -112,15 +116,17 @@ export default function SeatMapSystem() {
         </div>
       )}
 
-      {/* 왼쪽 사이드바 (이전 버전 스타일 유지) */}
+      {/* 왼쪽 사이드바 */}
       <div style={sidebarS}>
         {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{fontWeight: "bold", fontSize: "16px", marginBottom: "20px"}}>{appTitle}</h2>}
+        
         <div style={{marginBottom: "15px"}}>
           <label style={labelS}>층 이동</label>
           {floors.map((f) => (
             <button key={f.id} onClick={() => setActiveFloorId(f.id)} style={{...floorBtnS(activeFloorId === f.id), width: "100%", marginBottom: "4px"}}>{f.displayName}</button>
           ))}
         </div>
+
         <div style={{marginTop: "auto", display: "flex", flexDirection: "column", gap: "8px"}}>
           {isAdmin && (
             <>
@@ -133,23 +139,21 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
-      {/* 메인 캔버스 (자석 기능 추가) */}
+      {/* 메인 캔버스 */}
       <div style={{ flex: 1, padding: "20px", position: "relative" }}>
         {isAdmin && <button onClick={() => { if(history.length > 0) { setFloors(history[history.length-1]); setHistory(prev => prev.slice(0,-1)); }}} style={floatingUndoBtnS}>↩ 되돌리기</button>}
         <div ref={canvasRef} style={canvasS} onMouseDown={(e) => { if(e.target === canvasRef.current) setSelectedIds([]); }}>
           {currentItems.map((item) => (
             <Draggable 
               key={item.id} 
-              grid={[10, 10]} // ✅ 자석 정렬 기능
+              grid={[10, 10]} // ✅ 자석 기능 추가
               position={{ x: item.x, y: item.y }} 
               onStart={() => { if(!selectedIds.includes(item.id)) setSelectedIds([item.id]); }}
               onDrag={(e, data) => {
                 const dx = data.x - item.x; const dy = data.y - item.y;
                 updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, x: i.x + dx, y: i.y + dy } : i));
               }} 
-              onStop={saveHistory} 
-              disabled={!isAdmin}
-            >
+              onStop={saveHistory} disabled={!isAdmin}>
               <div style={{ position: "absolute", zIndex: selectedIds.includes(item.id) ? 100 : 10 }}>
                 <div style={{ transform: `rotate(${item.rotation}deg)`, width: item.width, height: item.height, backgroundColor: item.color, border: selectedIds.includes(item.id) ? "2px solid #2563eb" : "1px solid #ddd", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center", color: item.textColor, fontSize: "11px", fontWeight: "bold", textAlign: "center" }}>{item.name}</div>
               </div>
@@ -158,27 +162,31 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
-      {/* 우측 설정 패널 (정렬/회전 버튼 추가) */}
-      {isAdmin && selectedIds.length > 0 && (
+      {/* 우측 설정 패널 */}
+      {isAdmin && selectedItems.length > 0 && (
         <div style={rightPanelS}>
           <div style={propCardS}><label style={labelS}>이름 및 크기</label>
-            <input value={selectedItems[0]?.name || ""} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, name: e.target.value} : i))} style={inputS} />
+            <input value={selectedItems[0].name} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, name: e.target.value} : i))} style={inputS} />
             <div style={{display: "flex", gap: "4px", marginTop: "5px"}}>
-              <input type="number" value={selectedItems[0]?.width || 0} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, width: +e.target.value} : i))} style={inputS} />
-              <input type="number" value={selectedItems[0]?.height || 0} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, height: +e.target.value} : i))} style={inputS} />
+              <input type="number" value={selectedItems[0].width} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, width: +e.target.value} : i))} style={inputS} />
+              <input type="number" value={selectedItems[0].height} onChange={(e) => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, height: +e.target.value} : i))} style={inputS} />
             </div>
           </div>
 
-          <div style={propCardS}><label style={labelS}>정렬/회전</label>
-            <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", marginBottom: "5px"}}>
-              <button onClick={() => alignObjects('horizontal')} style={utilBtnS}>가로 정렬</button>
-              <button onClick={() => alignObjects('vertical')} style={utilBtnS}>세로 정렬</button>
-              <button onClick={() => rotateObjects(90)} style={utilBtnS}>90° 회전</button>
-              <button onClick={() => rotateObjects(180)} style={utilBtnS}>180° 회전</button>
+          <div style={propCardS}><label style={labelS}>색상 변경</label>
+            <div style={{display: "flex", gap: "5px", flexWrap: "wrap"}}>
+              {customPalette.map(c => <div key={c} onClick={() => updateItems(currentItems.map(i => selectedIds.includes(i.id) ? {...i, color: c} : i))} style={{width: "20px", height: "20px", borderRadius: "50%", backgroundColor: c, cursor: "pointer"}} />)}
             </div>
           </div>
 
           <div style={propCardS}><label style={labelS}>편집 도구</label>
+            <div style={{display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px", marginBottom: "5px"}}>
+              <button onClick={() => alignObjects('horizontal')} style={utilBtnS}>가로 정렬</button>
+              <button onClick={() => alignObjects('vertical')} style={utilBtnS}>세로 정렬</button>
+              <button onClick={() => rotateObjects(90)} style={utilBtnS}>90° 회전</button>
+              <button onClick={() => rotateObjects(180)} style={utilBtnS}>180° 회전</button> {/* ✅ 180도 추가 */}
+              <button onClick={() => rotateObjects(45)} style={utilBtnS}>45° 회전</button>
+            </div>
             <button onClick={duplicateSelected} style={{...utilBtnS, width: "100%", backgroundColor: "#f0fdf4", fontWeight: "bold", marginBottom: "5px"}}>선택 복제</button>
             <button onClick={() => { updateItems(currentItems.filter(i => !selectedIds.includes(i.id))); setSelectedIds([]); }} style={{...utilBtnS, width: "100%", backgroundColor: "#fef2f2", color: "#ef4444"}}>삭제</button>
           </div>
@@ -192,11 +200,11 @@ export default function SeatMapSystem() {
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f1f5f9" };
 const sidebarS: any = { width: "240px", backgroundColor: "#fff", padding: "15px", borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column" };
 const rightPanelS: any = { width: "230px", backgroundColor: "#fff", padding: "15px", borderLeft: "1px solid #e2e8f0", overflowY: "auto" };
-const canvasS: any = { flex: 1, height: "100%", borderRadius: "12px", border: "1px solid #e2e8f0", position: "relative", backgroundColor: "#fff", backgroundImage: "radial-gradient(#cbd5e1 1px, transparent 1px)", backgroundSize: "20px 20px" };
+const canvasS: any = { flex: 1, height: "100%", borderRadius: "12px", border: "1px solid #e2e8f0", position: "relative", backgroundColor: "#fff", backgroundImage: "radial-gradient(#f1f5f9 1px, transparent 1px)", backgroundSize: "20px 20px" };
 const modalOverlayS: any = { position: "fixed", inset: 0, backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 2000 };
 const modalContentS: any = { backgroundColor: "#fff", padding: "20px", borderRadius: "12px", width: "300px", textAlign: "center" };
 const modalInputS: any = { width: "100%", padding: "10px", border: "1px solid #ddd", borderRadius: "8px" };
-const adminBtnS: any = (adm: boolean) => ({ padding: "10px", backgroundColor: "#2563eb", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "bold" });
+const adminBtnS: any = (adm: boolean) => ({ padding: "10px", backgroundColor: adm ? "#1e293b" : "#2563eb", color: "#fff", border: "none", borderRadius: "8px", cursor: "pointer", fontSize: "12px", fontWeight: "bold" });
 const subBtnS: any = { padding: "10px", border: "1px solid #ddd", borderRadius: "8px", cursor: "pointer", fontSize: "12px" };
 const actionBtnS: any = (bg: string, co: string) => ({ padding: "10px", backgroundColor: bg, color: co, border: "none", borderRadius: "8px", fontWeight: "bold", cursor: "pointer", fontSize: "12px", marginBottom: "5px" });
 const floorBtnS: any = (act: boolean) => ({ padding: "8px", backgroundColor: act ? "#2563eb" : "#f8fafc", color: act ? "#fff" : "#64748b", border: "none", borderRadius: "6px", cursor: "pointer", textAlign: "left" });
