@@ -42,9 +42,9 @@ function applyOpacity(color: string, opacity: number): string {
 }
 
 // ─── 스냅 ─────────────────────────────────────────────────
-const SNAP_THRESHOLD = 16;
+const SNAP_THRESHOLD = 18;
 
-// 회전 고려한 실제 시각적 너비/높이 (90°/270°면 w↔h 교환)
+// 회전 고려한 실제 시각적 너비/높이
 function effectiveWH(item: RoomItem): { w: number; h: number } {
   const r = ((item.rotation % 360) + 360) % 360;
   return (r === 90 || r === 270)
@@ -52,53 +52,76 @@ function effectiveWH(item: RoomItem): { w: number; h: number } {
     : { w: item.width,  h: item.height };
 }
 
-// 회전 고려한 시각적 바운딩박스 (좌상단 기준)
+// Draggable position(ox,oy) 기준으로 시각적 바운딩박스 반환
+// CSS transform:rotate는 div 중심 기준 → 중심점은 항상 (ox + W/2, oy + H/2)
 function getBBox(item: RoomItem, ox = item.x, oy = item.y) {
   const { w, h } = effectiveWH(item);
-  // Draggable의 position은 원래 div 좌상단 → 중심점 보정
+  // 회전 전 div 크기로 중심점 계산 (Draggable position은 회전 전 좌상단)
   const cx = ox + item.width  / 2;
   const cy = oy + item.height / 2;
-  return { l: cx - w/2, r: cx + w/2, t: cy - h/2, b: cy + h/2, cx, cy, w, h };
+  // 시각적 바운딩박스 (회전 후 실제 차지하는 영역)
+  return { l: cx - w/2, r: cx + w/2, t: cy - h/2, b: cy + h/2, cx, cy };
 }
 
 function getSnapPosition(dragging: RoomItem, others: RoomItem[], rawX: number, rawY: number) {
-  let bX = rawX, bY = rawY;
-  let bestDX = SNAP_THRESHOLD + 1, bestDY = SNAP_THRESHOLD + 1;
-
   const d = getBBox(dragging, rawX, rawY);
+
+  let snapCX = d.cx; // 중심점 기준으로 스냅 결과 누적
+  let snapCY = d.cy;
+  let bestDX = SNAP_THRESHOLD + 1;
+  let bestDY = SNAP_THRESHOLD + 1;
 
   for (const o of others) {
     if (o.id === dragging.id) continue;
     const obb = getBBox(o);
 
-    // X축: 내 6개 포인트 ↔ 상대 6개 포인트
-    for (const [drag, target] of [
-      [d.l, obb.l], [d.l, obb.r],
-      [d.r, obb.r], [d.r, obb.l],
-      [d.cx, obb.cx],
-    ] as [number, number][]) {
-      const dist = Math.abs(drag - target);
-      if (dist < bestDX) { bestDX = dist; bX = rawX + (target - drag); }
+    // X: 내 left/right/center ↔ 상대 left/right/center
+    for (const [myEdge, theirEdge] of [
+      [d.l,  obb.l ],   // 왼쪽 ↔ 왼쪽 (정렬)
+      [d.l,  obb.r ],   // 내 왼쪽 ↔ 상대 오른쪽 (딱 붙기)
+      [d.r,  obb.r ],   // 오른쪽 ↔ 오른쪽 (정렬)
+      [d.r,  obb.l ],   // 내 오른쪽 ↔ 상대 왼쪽 (딱 붙기)
+      [d.cx, obb.cx],   // 중앙 ↔ 중앙
+    ] as [number,number][]) {
+      const dist = Math.abs(myEdge - theirEdge);
+      if (dist < bestDX) {
+        bestDX = dist;
+        // 스냅 후 중심점 x = 현재 중심점 + 보정값
+        snapCX = d.cx + (theirEdge - myEdge);
+      }
     }
 
-    // Y축
-    for (const [drag, target] of [
-      [d.t, obb.t], [d.t, obb.b],
-      [d.b, obb.b], [d.b, obb.t],
+    // Y: 내 top/bottom/center ↔ 상대 top/bottom/center
+    for (const [myEdge, theirEdge] of [
+      [d.t,  obb.t ],
+      [d.t,  obb.b ],
+      [d.b,  obb.b ],
+      [d.b,  obb.t ],
       [d.cy, obb.cy],
-    ] as [number, number][]) {
-      const dist = Math.abs(drag - target);
-      if (dist < bestDY) { bestDY = dist; bY = rawY + (target - drag); }
+    ] as [number,number][]) {
+      const dist = Math.abs(myEdge - theirEdge);
+      if (dist < bestDY) {
+        bestDY = dist;
+        snapCY = d.cy + (theirEdge - myEdge);
+      }
     }
   }
 
-  return { x: bX, y: bY, snappedX: bestDX <= SNAP_THRESHOLD, snappedY: bestDY <= SNAP_THRESHOLD };
+  // 중심점 → Draggable position(좌상단)으로 역변환
+  const finalX = snapCX - dragging.width  / 2;
+  const finalY = snapCY - dragging.height / 2;
+
+  return {
+    x: bestDX <= SNAP_THRESHOLD ? finalX : rawX,
+    y: bestDY <= SNAP_THRESHOLD ? finalY : rawY,
+    snappedX: bestDX <= SNAP_THRESHOLD,
+    snappedY: bestDY <= SNAP_THRESHOLD,
+  };
 }
 
 function isOverlapping(a: RoomItem, b: RoomItem): boolean {
   if (a.id === b.id) return false;
   const ba = getBBox(a), bb = getBBox(b);
-  // 테두리가 딱 닿은 건 겹침 아님 (1px 여유)
   return ba.l + 1 < bb.r && ba.r - 1 > bb.l && ba.t + 1 < bb.b && ba.b - 1 > bb.t;
 }
 
