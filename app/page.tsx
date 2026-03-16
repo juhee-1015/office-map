@@ -254,6 +254,7 @@ export default function SeatMapSystem() {
 
   const [snapGuides, setSnapGuides] = useState<{x?:number;y?:number}>({});
   const [overlappingIds, setOverlappingIds] = useState<Set<number>>(new Set());
+  const [allowOverlap, setAllowOverlap] = useState(false); // 겹침 허용 토글
 
   type ModalT = "login"|"changePw"|"saveVersion"|null;
   const [modal, setModal] = useState<ModalT>(null);
@@ -279,44 +280,44 @@ export default function SeatMapSystem() {
   // 브라우저 탭 제목 동기화
   useEffect(()=>{ document.title = appTitle; },[appTitle]);
 
-  // ── 서버 저장/불러오기 ──────────────────────────────────
-  const [saveStatus, setSaveStatus] = useState<"idle"|"saving"|"saved"|"loading"|"error">("idle");
+  // ── 저장/불러오기 (Vercel Blob API) ────────────────────
+  const [saveStatus, setSaveStatus] = useState<"idle"|"saving"|"saved"|"error">("idle");
 
-  // 앱 시작 시 서버에서 데이터 불러오기
+  // 앱 시작 시 서버에서 불러오기
   useEffect(()=>{
-    setSaveStatus("loading");
     fetch("/api/load")
-      .then(r=>r.json())
+      .then(r=>{ if(!r.ok) throw new Error(); return r.json(); })
       .then(data=>{
-        if(data){
-          setFloors(data.floors||[emptyFloor("F1","1층")]);
-          setActiveFloorId(data.activeFloorId||"F1");
-          setAppTitle(data.appTitle||"회사 배치도");
-          setColorGroupNames(data.colorGroupNames||{});
-          setColorGroupOrder(data.colorGroupOrder||[]);
-          setCustomPalette(data.customPalette||[]);
-        }
-        setSaveStatus("idle");
+        if(!data) return;
+        if(data.floors) setFloors(data.floors);
+        if(data.activeFloorId) setActiveFloorId(data.activeFloorId);
+        if(data.appTitle) setAppTitle(data.appTitle);
+        if(data.colorGroupNames) setColorGroupNames(data.colorGroupNames);
+        if(data.colorGroupOrder) setColorGroupOrder(data.colorGroupOrder);
+        if(data.customPalette) setCustomPalette(data.customPalette);
       })
-      .catch(()=>setSaveStatus("idle"));
+      .catch(e=>console.error("불러오기 실패",e));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   },[]);
 
-  // 서버에 저장
+  // 저장 핸들러
   const handleSaveToServer = useCallback(async()=>{
     setSaveStatus("saving");
     try {
-      await fetch("/api/save",{
+      const res = await fetch("/api/save",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
         body: JSON.stringify({ floors, activeFloorId, appTitle, colorGroupNames, colorGroupOrder, customPalette }),
       });
+      if(!res.ok) throw new Error();
       setSaveStatus("saved");
-      setTimeout(()=>setSaveStatus("idle"),2000);
-    } catch {
+      setTimeout(()=>setSaveStatus("idle"), 2000);
+    } catch(e){
+      console.error("저장 실패",e);
       setSaveStatus("error");
-      setTimeout(()=>setSaveStatus("idle"),2000);
+      setTimeout(()=>setSaveStatus("idle"), 2000);
     }
-  },[floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette]);
+  },[floors, activeFloorId, appTitle, colorGroupNames, colorGroupOrder, customPalette]);
 
   const curFloor = useMemo(()=>floors.find(f=>f.id===activeFloorId)||floors[0],[floors,activeFloorId]);
   const curItems = curFloor.items;
@@ -350,11 +351,12 @@ export default function SeatMapSystem() {
 
   const updateItems = useCallback((newItems:RoomItem[])=>{
     setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:newItems}:f));
+    if(allowOverlap){ setOverlappingIds(new Set()); return; }
     const ov=new Set<number>();
     for(let i=0;i<newItems.length;i++)for(let j=i+1;j<newItems.length;j++)
       if(isOverlapping(newItems[i],newItems[j])&&newItems[i].type==="seat"&&newItems[j].type==="seat"){ov.add(newItems[i].id);ov.add(newItems[j].id);}
     setOverlappingIds(ov);
-  },[activeFloorId]);
+  },[activeFloorId, allowOverlap]);
 
   const updateZones = useCallback((newZones:Zone[])=>{
     setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,zones:newZones}:f));
@@ -532,14 +534,6 @@ export default function SeatMapSystem() {
   },[isAdmin,undoHistory,selectedIds,selectedZoneId,curItems,curZones,duplicateSelected,saveHistory,updateItems,updateZones]);
 
   if(!hasMounted)return null;
-  if(saveStatus==="loading") return (
-    <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",backgroundColor:"#f1f5f9",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
-      <div style={{textAlign:"center"}}>
-        <div style={{fontSize:"32px",marginBottom:"12px"}}>🏢</div>
-        <div style={{fontSize:"14px",fontWeight:700,color:"#475569"}}>배치도 불러오는 중...</div>
-      </div>
-    </div>
-  );
   const selZone=curZones.find(z=>z.id===selectedZoneId);
 
   return (
@@ -776,7 +770,16 @@ export default function SeatMapSystem() {
               {zoneVisible?"🗂 구역 ON":"🗂 구역"}
             </button>
             <button onClick={handleExport} style={{...tbBtnS,backgroundColor:"#f0fdf4",color:"#059669",border:"1px solid #d1fae5"}}>🖼 PNG</button>
-            {overlappingIds.size>0&&<span style={{fontSize:"11px",color:"#ef4444",backgroundColor:"#fef2f2",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fecaca"}}>⚠ {overlappingIds.size}개 겹침</span>}
+            {overlappingIds.size>0&&!allowOverlap&&<span style={{fontSize:"11px",color:"#ef4444",backgroundColor:"#fef2f2",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fecaca"}}>⚠ {overlappingIds.size}개 겹침</span>}
+            <button onClick={()=>setAllowOverlap(p=>!p)}
+              style={{...tbBtnS,
+                backgroundColor:allowOverlap?"#fef9c3":"#fff",
+                color:allowOverlap?"#b45309":"#94a3b8",
+                border:allowOverlap?"1px solid #fde68a":"1px solid #e2e8f0",
+                fontSize:"10px",
+              }}>
+              {allowOverlap?"⚠ 겹침허용 ON":"겹침허용"}
+            </button>
             {zoneDrawMode&&<span style={{fontSize:"11px",color:"#b45309",backgroundColor:"#fef9c3",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fde68a"}}>✏️ 드래그해서 구역 그리기</span>}
           </>}
         </div>
