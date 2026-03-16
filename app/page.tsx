@@ -42,27 +42,55 @@ function applyOpacity(color: string, opacity: number): string {
 }
 
 // ─── 스냅 ─────────────────────────────────────────────────
-const SNAP_THRESHOLD = 12;
-const GAP = 0; // 좌석 간격 0 = 완전히 붙음
+const SNAP_THRESHOLD = 16; // 자석 감지 거리 (px)
 
 function getSnapPosition(dragging: RoomItem, others: RoomItem[], rawX: number, rawY: number) {
-  let bX = rawX, bY = rawY, dX = SNAP_THRESHOLD+1, dY = SNAP_THRESHOLD+1;
-  const dL=rawX,dR=rawX+dragging.width,dT=rawY,dB=rawY+dragging.height;
-  const dCX=rawX+dragging.width/2,dCY=rawY+dragging.height/2;
+  let bX = rawX, bY = rawY;
+  let bestDX = SNAP_THRESHOLD + 1, bestDY = SNAP_THRESHOLD + 1;
+
+  // 드래그 중인 아이템의 모서리/중앙 좌표
+  const dL  = rawX;
+  const dR  = rawX + dragging.width;
+  const dCX = rawX + dragging.width  / 2;
+  const dT  = rawY;
+  const dB  = rawY + dragging.height;
+  const dCY = rawY + dragging.height / 2;
+
   for (const o of others) {
-    if (o.id===dragging.id) continue;
-    const oL=o.x,oR=o.x+o.width,oT=o.y,oB=o.y+o.height,oCX=o.x+o.width/2,oCY=o.y+o.height/2;
-    // X축: 왼쪽끝=왼쪽끝, 왼쪽끝=오른쪽끝(딱붙기), 오른쪽끝=오른쪽끝, 오른쪽끝=왼쪽끝(딱붙기), 중앙=중앙
-    for (const c of [{drag:dL,t:oL},{drag:dL,t:oR},{drag:dR,t:oR},{drag:dR,t:oL},{drag:dCX,t:oCX}]) {
-      const d=Math.abs(c.drag-c.t); if(d<dX){dX=d;bX=rawX+(c.t-c.drag);}
+    if (o.id === dragging.id) continue;
+    const oL  = o.x;
+    const oR  = o.x + o.width;
+    const oCX = o.x + o.width  / 2;
+    const oT  = o.y;
+    const oB  = o.y + o.height;
+    const oCY = o.y + o.height / 2;
+
+    // X축: 내 왼쪽/오른쪽/중앙 ↔ 상대 왼쪽/오른쪽/중앙 (6가지 조합)
+    for (const [drag, target] of [
+      [dL, oL], [dL, oR],   // 내 왼쪽 ↔ 상대 왼쪽 or 오른쪽 (딱 붙기)
+      [dR, oR], [dR, oL],   // 내 오른쪽 ↔ 상대 오른쪽 or 왼쪽 (딱 붙기)
+      [dCX, oCX],            // 중앙 정렬
+    ] as [number,number][]) {
+      const d = Math.abs(drag - target);
+      if (d < bestDX) { bestDX = d; bX = rawX + (target - drag); }
     }
-    // Y축: 위끝=위끝, 위끝=아래끝(딱붙기), 아래끝=아래끝, 아래끝=위끝(딱붙기), 중앙=중앙
-    for (const c of [{drag:dT,t:oT},{drag:dT,t:oB},{drag:dB,t:oB},{drag:dB,t:oT},{drag:dCY,t:oCY}]) {
-      const d=Math.abs(c.drag-c.t); if(d<dY){dY=d;bY=rawY+(c.t-c.drag);}
+
+    // Y축: 내 위/아래/중앙 ↔ 상대 위/아래/중앙 (6가지 조합)
+    for (const [drag, target] of [
+      [dT, oT], [dT, oB],   // 내 위 ↔ 상대 위 or 아래 (딱 붙기)
+      [dB, oB], [dB, oT],   // 내 아래 ↔ 상대 아래 or 위 (딱 붙기)
+      [dCY, oCY],            // 중앙 정렬
+    ] as [number,number][]) {
+      const d = Math.abs(drag - target);
+      if (d < bestDY) { bestDY = d; bY = rawY + (target - drag); }
     }
   }
-  // 그리드 스냅 제거 — 다른 좌석에 붙지 않을 땐 자유롭게
-  return {x:bX,y:bY,snappedX:dX<=SNAP_THRESHOLD,snappedY:dY<=SNAP_THRESHOLD};
+
+  return {
+    x: bX, y: bY,
+    snappedX: bestDX <= SNAP_THRESHOLD,
+    snappedY: bestDY <= SNAP_THRESHOLD,
+  };
 }
 
 function isOverlapping(a: RoomItem, b: RoomItem): boolean {
