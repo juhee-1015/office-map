@@ -42,61 +42,64 @@ function applyOpacity(color: string, opacity: number): string {
 }
 
 // ─── 스냅 ─────────────────────────────────────────────────
-const SNAP_THRESHOLD = 16; // 자석 감지 거리 (px)
+const SNAP_THRESHOLD = 16;
+
+// 회전 고려한 실제 시각적 너비/높이 (90°/270°면 w↔h 교환)
+function effectiveWH(item: RoomItem): { w: number; h: number } {
+  const r = ((item.rotation % 360) + 360) % 360;
+  return (r === 90 || r === 270)
+    ? { w: item.height, h: item.width }
+    : { w: item.width,  h: item.height };
+}
+
+// 회전 고려한 시각적 바운딩박스 (좌상단 기준)
+function getBBox(item: RoomItem, ox = item.x, oy = item.y) {
+  const { w, h } = effectiveWH(item);
+  // Draggable의 position은 원래 div 좌상단 → 중심점 보정
+  const cx = ox + item.width  / 2;
+  const cy = oy + item.height / 2;
+  return { l: cx - w/2, r: cx + w/2, t: cy - h/2, b: cy + h/2, cx, cy, w, h };
+}
 
 function getSnapPosition(dragging: RoomItem, others: RoomItem[], rawX: number, rawY: number) {
   let bX = rawX, bY = rawY;
   let bestDX = SNAP_THRESHOLD + 1, bestDY = SNAP_THRESHOLD + 1;
 
-  // 드래그 중인 아이템의 모서리/중앙 좌표
-  const dL  = rawX;
-  const dR  = rawX + dragging.width;
-  const dCX = rawX + dragging.width  / 2;
-  const dT  = rawY;
-  const dB  = rawY + dragging.height;
-  const dCY = rawY + dragging.height / 2;
+  const d = getBBox(dragging, rawX, rawY);
 
   for (const o of others) {
     if (o.id === dragging.id) continue;
-    const oL  = o.x;
-    const oR  = o.x + o.width;
-    const oCX = o.x + o.width  / 2;
-    const oT  = o.y;
-    const oB  = o.y + o.height;
-    const oCY = o.y + o.height / 2;
+    const obb = getBBox(o);
 
-    // X축: 내 왼쪽/오른쪽/중앙 ↔ 상대 왼쪽/오른쪽/중앙 (6가지 조합)
+    // X축: 내 6개 포인트 ↔ 상대 6개 포인트
     for (const [drag, target] of [
-      [dL, oL], [dL, oR],   // 내 왼쪽 ↔ 상대 왼쪽 or 오른쪽 (딱 붙기)
-      [dR, oR], [dR, oL],   // 내 오른쪽 ↔ 상대 오른쪽 or 왼쪽 (딱 붙기)
-      [dCX, oCX],            // 중앙 정렬
-    ] as [number,number][]) {
-      const d = Math.abs(drag - target);
-      if (d < bestDX) { bestDX = d; bX = rawX + (target - drag); }
+      [d.l, obb.l], [d.l, obb.r],
+      [d.r, obb.r], [d.r, obb.l],
+      [d.cx, obb.cx],
+    ] as [number, number][]) {
+      const dist = Math.abs(drag - target);
+      if (dist < bestDX) { bestDX = dist; bX = rawX + (target - drag); }
     }
 
-    // Y축: 내 위/아래/중앙 ↔ 상대 위/아래/중앙 (6가지 조합)
+    // Y축
     for (const [drag, target] of [
-      [dT, oT], [dT, oB],   // 내 위 ↔ 상대 위 or 아래 (딱 붙기)
-      [dB, oB], [dB, oT],   // 내 아래 ↔ 상대 아래 or 위 (딱 붙기)
-      [dCY, oCY],            // 중앙 정렬
-    ] as [number,number][]) {
-      const d = Math.abs(drag - target);
-      if (d < bestDY) { bestDY = d; bY = rawY + (target - drag); }
+      [d.t, obb.t], [d.t, obb.b],
+      [d.b, obb.b], [d.b, obb.t],
+      [d.cy, obb.cy],
+    ] as [number, number][]) {
+      const dist = Math.abs(drag - target);
+      if (dist < bestDY) { bestDY = dist; bY = rawY + (target - drag); }
     }
   }
 
-  return {
-    x: bX, y: bY,
-    snappedX: bestDX <= SNAP_THRESHOLD,
-    snappedY: bestDY <= SNAP_THRESHOLD,
-  };
+  return { x: bX, y: bY, snappedX: bestDX <= SNAP_THRESHOLD, snappedY: bestDY <= SNAP_THRESHOLD };
 }
 
 function isOverlapping(a: RoomItem, b: RoomItem): boolean {
-  if(a.id===b.id)return false;
-  // 딱 붙은 건 겹침 아님 — 1px 이상 실제로 겹쳐야 감지
-  return a.x+1<b.x+b.width && a.x+a.width-1>b.x && a.y+1<b.y+b.height && a.y+a.height-1>b.y;
+  if (a.id === b.id) return false;
+  const ba = getBBox(a), bb = getBBox(b);
+  // 테두리가 딱 닿은 건 겹침 아님 (1px 여유)
+  return ba.l + 1 < bb.r && ba.r - 1 > bb.l && ba.t + 1 < bb.b && ba.b - 1 > bb.t;
 }
 
 function emptyFloor(id: string, displayName: string): FloorInfo {
@@ -252,6 +255,45 @@ export default function SeatMapSystem() {
 
   // 브라우저 탭 제목 동기화
   useEffect(()=>{ document.title = appTitle; },[appTitle]);
+
+  // ── 서버 저장/불러오기 ──────────────────────────────────
+  const [saveStatus, setSaveStatus] = useState<"idle"|"saving"|"saved"|"loading"|"error">("idle");
+
+  // 앱 시작 시 서버에서 데이터 불러오기
+  useEffect(()=>{
+    setSaveStatus("loading");
+    fetch("/api/load")
+      .then(r=>r.json())
+      .then(data=>{
+        if(data){
+          setFloors(data.floors||[emptyFloor("F1","1층")]);
+          setActiveFloorId(data.activeFloorId||"F1");
+          setAppTitle(data.appTitle||"회사 배치도");
+          setColorGroupNames(data.colorGroupNames||{});
+          setColorGroupOrder(data.colorGroupOrder||[]);
+          setCustomPalette(data.customPalette||[]);
+        }
+        setSaveStatus("idle");
+      })
+      .catch(()=>setSaveStatus("idle"));
+  },[]);
+
+  // 서버에 저장
+  const handleSaveToServer = useCallback(async()=>{
+    setSaveStatus("saving");
+    try {
+      await fetch("/api/save",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ floors, activeFloorId, appTitle, colorGroupNames, colorGroupOrder, customPalette }),
+      });
+      setSaveStatus("saved");
+      setTimeout(()=>setSaveStatus("idle"),2000);
+    } catch {
+      setSaveStatus("error");
+      setTimeout(()=>setSaveStatus("idle"),2000);
+    }
+  },[floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette]);
 
   const curFloor = useMemo(()=>floors.find(f=>f.id===activeFloorId)||floors[0],[floors,activeFloorId]);
   const curItems = curFloor.items;
@@ -467,6 +509,14 @@ export default function SeatMapSystem() {
   },[isAdmin,undoHistory,selectedIds,selectedZoneId,curItems,curZones,duplicateSelected,saveHistory,updateItems,updateZones]);
 
   if(!hasMounted)return null;
+  if(saveStatus==="loading") return (
+    <div style={{display:"flex",height:"100vh",alignItems:"center",justifyContent:"center",backgroundColor:"#f1f5f9",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
+      <div style={{textAlign:"center"}}>
+        <div style={{fontSize:"32px",marginBottom:"12px"}}>🏢</div>
+        <div style={{fontSize:"14px",fontWeight:700,color:"#475569"}}>배치도 불러오는 중...</div>
+      </div>
+    </div>
+  );
   const selZone=curZones.find(z=>z.id===selectedZoneId);
 
   return (
@@ -676,11 +726,22 @@ export default function SeatMapSystem() {
       {/* ══ 메인 캔버스 ══ */}
       <div style={{flex:1,padding:"16px",overflow:"hidden",display:"flex",flexDirection:"column"}}>
         <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"8px",flexWrap:"wrap"}}>
+          {/* ☁️ 저장 버튼 — 관리자/비관리자 모두 표시 */}
+          <button onClick={handleSaveToServer}
+            disabled={saveStatus==="saving"||saveStatus==="loading"}
+            style={{...tbBtnS,
+              backgroundColor: saveStatus==="saved"?"#f0fdf4":saveStatus==="error"?"#fef2f2":"#ecfdf5",
+              color: saveStatus==="saved"?"#059669":saveStatus==="error"?"#ef4444":"#059669",
+              border: saveStatus==="error"?"1px solid #fecaca":"1px solid #d1fae5",
+              fontWeight:700,
+            }}>
+            {saveStatus==="saving"?"저장 중...":saveStatus==="saved"?"✅ 저장됨":saveStatus==="error"?"❌ 오류":"☁️ 저장"}
+          </button>
           {isAdmin&&<>
             <button onClick={()=>{if(undoHistory.length>0){setFloors(undoHistory[undoHistory.length-1]);setUndoHistory(p=>p.slice(0,-1));} }} style={tbBtnS}>↩ 되돌리기</button>
             <button onClick={selectAll} style={tbBtnS}>☑ 전체선택</button>
             <button onClick={duplicateSelected} disabled={!selectedIds.length} style={{...tbBtnS,opacity:selectedIds.length?1:0.4}}>⿻ 복제</button>
-            <button onClick={()=>setModal("saveVersion")} style={{...tbBtnS,backgroundColor:"#f0fdf4",color:"#10b981",border:"1px solid #d1fae5"}}>💾 버전저장</button>
+            <button onClick={()=>setModal("saveVersion")} style={{...tbBtnS,backgroundColor:"#f8fafc",color:"#64748b",border:"1px solid #e2e8f0"}}>🗂 버전</button>
             <div style={{width:"1px",height:"20px",backgroundColor:"#e2e8f0"}}/>
             <button onClick={()=>setEmptyHighlight(p=>!p)}
               style={{...tbBtnS,backgroundColor:emptyHighlight?"#fef9c3":"#fff",color:emptyHighlight?"#b45309":"#475569",border:emptyHighlight?"1px solid #fde68a":"1px solid #e2e8f0"}}>
