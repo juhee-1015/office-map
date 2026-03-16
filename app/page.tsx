@@ -71,26 +71,23 @@ function isOverlapping(a: RoomItem, b: RoomItem): boolean {
   return a.x<b.x+b.width-m&&a.x+a.width>b.x+m&&a.y<b.y+b.height-m&&a.y+a.height>b.y+m;
 }
 
-// ─── 반원 문 SVG ─────────────────────────────────────────
-function DoorShape({ w, h, color, rotation, name, isSelected }: {
+// ─── 출입문 - 심플 박스 스타일 ──────────────────────────
+function DoorShape({ w, h, rotation, name, isSelected }: {
   w:number; h:number; color:string; rotation:number; name:string; isSelected:boolean;
 }) {
-  const s = Math.min(w, h);
   return (
-    <div style={{transform:`rotate(${rotation}deg)`,width:w,height:h,position:"relative",
-      border:isSelected?"2px solid #2563eb":"1.5px solid "+color,
-      borderRadius:"4px",cursor:"grab",
-      boxShadow:isSelected?"0 0 0 3px rgba(37,99,235,0.2)":"0 1px 3px rgba(0,0,0,0.1)"}}>
-      <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{position:"absolute",inset:0,overflow:"visible"}}>
-        {/* 벽면 기준선 */}
-        <line x1={0} y1={h*0.5} x2={w*0.18} y2={h*0.5} stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
-        {/* 반원 호 (문 열림 표시) */}
-        <path d={`M ${w*0.18} ${h*0.5} A ${s*0.58} ${s*0.58} 0 0 1 ${w*0.18+s*0.58*Math.cos(-Math.PI/2)} ${h*0.5+s*0.58*Math.sin(-Math.PI/2)}`}
-          fill={hexToRgba(colorToHex(color),0.12)} stroke={color} strokeWidth="1.5"/>
-        {/* 문짝 직선 */}
-        <line x1={w*0.18} y1={h*0.5} x2={w*0.18} y2={h*0.5-s*0.58} stroke={color} strokeWidth="2.5" strokeLinecap="round"/>
-      </svg>
-      {name&&<span style={{position:"absolute",bottom:"2px",left:0,right:0,textAlign:"center",fontSize:"9px",color,fontWeight:700,pointerEvents:"none"}}>{name}</span>}
+    <div style={{
+      transform:`rotate(${rotation}deg)`, width:w, height:h,
+      backgroundColor:"#fff",
+      border: isSelected ? "2px solid #2563eb" : "2px dashed #94a3b8",
+      borderRadius:"5px", cursor:"grab", display:"flex",
+      alignItems:"center", justifyContent:"center",
+      boxShadow: isSelected ? "0 0 0 3px rgba(37,99,235,0.2)" : "0 1px 3px rgba(0,0,0,0.06)",
+      userSelect:"none",
+    }}>
+      <span style={{fontSize:"11px", fontWeight:700, color:"#64748b", textAlign:"center", lineHeight:1.2}}>
+        {name||"출입문"}
+      </span>
     </div>
   );
 }
@@ -123,14 +120,18 @@ export default function SeatMapSystem() {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [undoHistory, setUndoHistory] = useState<FloorInfo[][]>([]);
 
-  const [departments, setDepartments] = useState<Department[]>([
+  // 부서 관련 — 기존 departments는 우측 패널 색상 팔레트용으로만 유지
+  const [departments] = useState<Department[]>([
     {id:"d1",name:"기획",color:"#3b82f6"},{id:"d2",name:"개발",color:"#10b981"},
     {id:"d3",name:"디자인",color:"#8b5cf6"},{id:"d4",name:"영업",color:"#f59e0b"},
     {id:"d5",name:"인사",color:"#ef4444"},{id:"d6",name:"재무",color:"#06b6d4"},
     {id:"d7",name:"기타",color:"#64748b"},
   ]);
-  const [editingDeptId, setEditingDeptId] = useState<string|null>(null);
-  const [deptOrder, setDeptOrder] = useState<string[]>([]);
+
+  // 색상 그룹 기반 통계 (실제 사용된 색상만 자동 등록)
+  const [colorGroupNames, setColorGroupNames] = useState<Record<string,string>>({});
+  const [colorGroupOrder, setColorGroupOrder] = useState<string[]>([]);
+  const [editingColorHex, setEditingColorHex] = useState<string|null>(null);
   const deptDragIdx = useRef<number|null>(null);
 
   const [versions, setVersions] = useState<VersionSnapshot[]>([]);
@@ -156,11 +157,10 @@ export default function SeatMapSystem() {
   const isBoxing = useRef(false);
   const canvasRef = useRef<HTMLDivElement>(null);
 
-  type SideTab = "floors"|"stats"|"versions"|"shortcuts";
+  type SideTab = "floors"|"versions"|"shortcuts";
   const [sideTab, setSideTab] = useState<SideTab>("floors");
 
   useEffect(()=>{setHasMounted(true);},[]);
-  useEffect(()=>{if(deptOrder.length!==departments.length)setDeptOrder(departments.map(d=>d.id));},[departments]);
 
   const curFloor = useMemo(()=>floors.find(f=>f.id===activeFloorId)||floors[0],[floors,activeFloorId]);
   const curItems = curFloor.items;
@@ -168,11 +168,39 @@ export default function SeatMapSystem() {
   const allSeats = useMemo(()=>floors.flatMap(f=>f.items.filter(i=>i.type==="seat")),[floors]);
   const curSeats = curItems.filter(i=>i.type==="seat");
 
-  const deptStats = useMemo(()=>departments.map(d=>({
-    ...d,
-    count: allSeats.filter(s=>colorToHex(s.color)===d.color).length,
-    curCount: curSeats.filter(s=>colorToHex(s.color)===d.color).length,
-  })),[departments,allSeats,curSeats]);
+  // 실제 배치된 색상만 추출하여 그룹 생성
+  const activeColorGroups = useMemo(()=>{
+    const hexSet = new Set<string>();
+    allSeats.forEach(s=>hexSet.add(colorToHex(s.color)));
+    // 새 색상 자동 등록
+    hexSet.forEach(hex=>{
+      if(!colorGroupNames[hex]){
+        const preset = departments.find(d=>d.color===hex);
+        // 이름 없으면 나중에 setColorGroupNames로 등록 (useMemo 안에서 set 불가 → useEffect로 처리)
+      }
+    });
+    const hexList = Array.from(hexSet);
+    // colorGroupOrder 기준으로 정렬, 없는건 뒤에
+    const ordered = [
+      ...colorGroupOrder.filter(h=>hexList.includes(h)),
+      ...hexList.filter(h=>!colorGroupOrder.includes(h)),
+    ];
+    return ordered.map(hex=>({
+      hex,
+      name: colorGroupNames[hex] || departments.find(d=>d.color===hex)?.name || hex,
+      totalCount: allSeats.filter(s=>colorToHex(s.color)===hex).length,
+      curCount: curSeats.filter(s=>colorToHex(s.color)===hex).length,
+    }));
+  },[allSeats,curSeats,colorGroupNames,colorGroupOrder,departments]);
+
+  // 새 색상이 등장하면 colorGroupOrder에 자동 추가
+  useEffect(()=>{
+    const hexSet = new Set(allSeats.map(s=>colorToHex(s.color)));
+    setColorGroupOrder(prev=>{
+      const newHexes=Array.from(hexSet).filter(h=>!prev.includes(h));
+      return newHexes.length>0?[...prev,...newHexes]:prev;
+    });
+  },[allSeats]);
 
   const saveHistory = useCallback(()=>
     setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(floors))]),[floors]);
@@ -295,8 +323,6 @@ export default function SeatMapSystem() {
 
   if(!hasMounted)return null;
 
-  const orderedDepts=(deptOrder.length===departments.length?deptOrder.map(id=>departments.find(d=>d.id===id)!).filter(Boolean):departments);
-
   return (
     <main style={{display:"flex",height:"100vh",backgroundColor:"#f1f5f9",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
 
@@ -353,20 +379,22 @@ export default function SeatMapSystem() {
           :<h2 style={{fontWeight:800,fontSize:"13px",marginBottom:"10px",color:"#1e293b",letterSpacing:"-0.3px"}}>{appTitle}</h2>
         }
 
-        {/* 탭 */}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px",marginBottom:"12px"}}>
-          {([ ["floors","🏢 층 정보"],["stats","📊 통계"],["versions","💾 버전"],["shortcuts","⌨️ 단축키"] ] as [SideTab,string][]).map(([k,lbl])=>(
-            <button key={k} onClick={()=>setSideTab(k)}
-              style={{padding:"5px 0",fontSize:"10px",fontWeight:700,border:"none",borderRadius:"6px",cursor:"pointer",backgroundColor:sideTab===k?"#2563eb":"#f1f5f9",color:sideTab===k?"#fff":"#64748b"}}>
-              {lbl}
-            </button>
-          ))}
-        </div>
+        {/* 탭 — 관리자일 때만 버전/단축키 탭 표시 */}
+        {isAdmin && (
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"3px",marginBottom:"12px"}}>
+            {([ ["versions","💾 버전"],["shortcuts","⌨️ 단축키"] ] as [SideTab,string][]).map(([k,lbl])=>(
+              <button key={k} onClick={()=>setSideTab(p=>p===k?"floors":k)}
+                style={{padding:"5px 0",fontSize:"10px",fontWeight:700,border:"none",borderRadius:"6px",cursor:"pointer",backgroundColor:sideTab===k?"#2563eb":"#f1f5f9",color:sideTab===k?"#fff":"#64748b"}}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        )}
 
-        {/* ── 층 정보 ── */}
-        {sideTab==="floors"&&<>
+        {/* ── 층 정보 — 항상 표시 ── */}
+        {(sideTab==="floors"||!isAdmin)&&<>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
-            <span style={slS}>층 목록</span>
+            <span style={slS}>🏢 층 정보</span>
             {isAdmin&&<button onClick={addFloor} style={{fontSize:"10px",padding:"2px 8px",backgroundColor:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",borderRadius:"4px",cursor:"pointer",fontWeight:700}}>+ 추가</button>}
           </div>
           {floors.map(f=>(
@@ -387,59 +415,75 @@ export default function SeatMapSystem() {
               {isAdmin&&floors.length>1&&<button onClick={()=>deleteFloor(f.id)} style={{width:"22px",height:"22px",padding:0,backgroundColor:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",borderRadius:"5px",cursor:"pointer",fontSize:"14px",lineHeight:1,flexShrink:0}}>×</button>}
             </div>
           ))}
-          {isAdmin&&<p style={{fontSize:"10px",color:"#c0c8d6",marginTop:"4px"}}>더블클릭으로 층 이름 변경</p>}
-        </>}
+          {isAdmin&&<p style={{fontSize:"10px",color:"#c0c8d6",marginTop:"2px",marginBottom:"12px"}}>더블클릭으로 층 이름 변경</p>}
 
-        {/* ── 좌석 통계 ── */}
-        {sideTab==="stats"&&<>
+          {/* ── 좌석 통계 — 층 아래에 항상 표시 ── */}
           <div style={{backgroundColor:"#f8fafc",borderRadius:"8px",padding:"10px",marginBottom:"10px",border:"1px solid #e2e8f0"}}>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:"5px"}}>
               <span style={{fontSize:"11px",color:"#64748b"}}>🏢 전체</span>
-              <span style={{fontSize:"14px",fontWeight:800,color:"#1e293b"}}>{allSeats.length}석</span>
+              <span style={{fontSize:"13px",fontWeight:800,color:"#1e293b"}}>{allSeats.length}석</span>
             </div>
             <div style={{display:"flex",justifyContent:"space-between"}}>
               <span style={{fontSize:"11px",color:"#64748b"}}>📍 {curFloor.displayName}</span>
-              <span style={{fontSize:"14px",fontWeight:800,color:"#2563eb"}}>{curSeats.length}석</span>
+              <span style={{fontSize:"13px",fontWeight:800,color:"#2563eb"}}>{curSeats.length}석</span>
             </div>
           </div>
+
+          {/* 부서별 — 실제 사용 중인 색상만 + 미분류 색상도 자동 추가 */}
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"6px"}}>
-            <span style={slS}>부서별 좌석</span>
-            <span style={{fontSize:"9px",color:"#c0c8d6"}}>색상=선택 / 드래그=순서변경</span>
+            <span style={slS}>부서별</span>
+            {isAdmin&&<span style={{fontSize:"9px",color:"#c0c8d6"}}>색상클릭=선택</span>}
           </div>
-          {orderedDepts.map((dept,idx)=>(
-            <div key={dept.id} draggable
-              onDragStart={()=>{deptDragIdx.current=idx;}}
-              onDragOver={e=>e.preventDefault()}
-              onDrop={()=>{
-                if(deptDragIdx.current===null||deptDragIdx.current===idx)return;
-                const o=[...deptOrder];const[m]=o.splice(deptDragIdx.current,1);o.splice(idx,0,m);
-                setDeptOrder(o);deptDragIdx.current=null;
-              }}
-              style={{display:"flex",alignItems:"center",gap:"7px",padding:"7px 8px",backgroundColor:"#fafafa",border:"1px solid #f1f5f9",borderRadius:"7px",marginBottom:"4px",cursor:"grab"}}>
-              <div onClick={()=>selectByColor(dept.color)}
-                style={{width:"16px",height:"16px",borderRadius:"50%",backgroundColor:dept.color,flexShrink:0,cursor:"pointer",border:"2px solid rgba(0,0,0,0.1)"}} title="클릭 → 이 부서 좌석 전체선택"/>
-              {editingDeptId===dept.id&&isAdmin
-                ?<input autoFocus value={dept.name}
-                  onChange={e=>setDepartments(p=>p.map(d=>d.id===dept.id?{...d,name:e.target.value}:d))}
-                  onBlur={()=>setEditingDeptId(null)}
-                  onKeyDown={e=>{if(e.key==="Enter")setEditingDeptId(null);}}
-                  style={{flex:1,fontSize:"11px",border:"1px solid #2563eb",borderRadius:"4px",padding:"2px 4px",outline:"none"}}/>
-                :<span onDoubleClick={()=>{if(isAdmin)setEditingDeptId(dept.id);}}
-                  style={{flex:1,fontSize:"11px",color:"#374151",fontWeight:600,cursor:isAdmin?"text":"default"}}>{dept.name}</span>
-              }
-              <span style={{fontSize:"10px",color:"#2563eb",fontWeight:700,minWidth:"20px",textAlign:"right"}}>{deptStats.find(d=>d.id===dept.id)?.curCount??0}</span>
-              <span style={{fontSize:"10px",color:"#c0c8d6"}}>/</span>
-              <span style={{fontSize:"10px",color:"#374151",fontWeight:800,minWidth:"20px"}}>{deptStats.find(d=>d.id===dept.id)?.count??0}</span>
-            </div>
-          ))}
-          {isAdmin&&<p style={{fontSize:"9px",color:"#c0c8d6",marginTop:"4px"}}>부서명 더블클릭 = 이름 변경</p>}
+          {activeColorGroups.length===0
+            ?<p style={{fontSize:"11px",color:"#c0c8d6",textAlign:"center",padding:"12px 0"}}>배치된 좌석 없음</p>
+            :activeColorGroups.map((group,idx)=>(
+              <div key={group.hex} draggable={isAdmin}
+                onDragStart={()=>{deptDragIdx.current=idx;}}
+                onDragOver={e=>e.preventDefault()}
+                onDrop={()=>{
+                  if(!isAdmin||deptDragIdx.current===null||deptDragIdx.current===idx)return;
+                  // 드래그 순서 변경: colorGroupOrder
+                  const o=[...colorGroupOrder];
+                  if(!o.includes(group.hex)){return;}
+                  const fromHex=activeColorGroups[deptDragIdx.current]?.hex;
+                  if(!fromHex)return;
+                  const fi=o.indexOf(fromHex),ti=o.indexOf(group.hex);
+                  if(fi===-1||ti===-1)return;
+                  const newO=[...o];newO.splice(fi,1);newO.splice(ti,0,fromHex);
+                  setColorGroupOrder(newO);deptDragIdx.current=null;
+                }}
+                style={{display:"flex",alignItems:"center",gap:"7px",padding:"7px 8px",backgroundColor:"#fafafa",border:"1px solid #f1f5f9",borderRadius:"7px",marginBottom:"4px",cursor:isAdmin?"grab":"default"}}>
+                {/* 색상 동그라미 클릭 = 현재 층에서 해당 색상 좌석 선택 */}
+                <div onClick={()=>selectByColor(group.hex)}
+                  style={{width:"16px",height:"16px",borderRadius:"50%",backgroundColor:group.hex,flexShrink:0,cursor:"pointer",border:"2px solid rgba(0,0,0,0.1)"}}
+                  title="클릭 → 현재 층 해당 좌석 전체선택"/>
+                {/* 부서명 - 더블클릭 수정 */}
+                {editingColorHex===group.hex&&isAdmin
+                  ?<input autoFocus value={group.name}
+                    onChange={e=>setColorGroupNames(p=>({...p,[group.hex]:e.target.value}))}
+                    onBlur={()=>setEditingColorHex(null)}
+                    onKeyDown={e=>{if(e.key==="Enter")setEditingColorHex(null);}}
+                    style={{flex:1,fontSize:"11px",border:"1px solid #2563eb",borderRadius:"4px",padding:"2px 4px",outline:"none"}}/>
+                  :<span onDoubleClick={()=>{if(isAdmin)setEditingColorHex(group.hex);}}
+                    style={{flex:1,fontSize:"11px",color:"#374151",fontWeight:600,cursor:isAdmin?"text":"default"}}
+                    title={isAdmin?"더블클릭하여 이름 변경":""}>
+                    {group.name}
+                  </span>
+                }
+                <span style={{fontSize:"10px",color:"#2563eb",fontWeight:700,minWidth:"18px",textAlign:"right"}}>{group.curCount}</span>
+                <span style={{fontSize:"9px",color:"#c0c8d6"}}>/</span>
+                <span style={{fontSize:"10px",color:"#374151",fontWeight:800,minWidth:"18px"}}>{group.totalCount}</span>
+              </div>
+            ))
+          }
+          {isAdmin&&activeColorGroups.length>0&&<p style={{fontSize:"9px",color:"#c0c8d6",marginTop:"2px"}}>이름 더블클릭 변경 · 드래그 순서변경</p>}
         </>}
 
         {/* ── 버전 히스토리 ── */}
-        {sideTab==="versions"&&<>
+        {sideTab==="versions"&&isAdmin&&<>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"8px"}}>
             <span style={slS}>버전 히스토리</span>
-            {isAdmin&&<button onClick={()=>setModal("saveVersion")} style={{fontSize:"10px",padding:"2px 8px",backgroundColor:"#f0fdf4",color:"#10b981",border:"1px solid #bbf7d0",borderRadius:"4px",cursor:"pointer",fontWeight:700}}>+ 저장</button>}
+            <button onClick={()=>setModal("saveVersion")} style={{fontSize:"10px",padding:"2px 8px",backgroundColor:"#f0fdf4",color:"#10b981",border:"1px solid #bbf7d0",borderRadius:"4px",cursor:"pointer",fontWeight:700}}>+ 저장</button>
           </div>
           {versions.length===0
             ?<p style={{fontSize:"11px",color:"#c0c8d6",textAlign:"center",paddingTop:"20px"}}>저장된 버전 없음</p>
@@ -449,7 +493,7 @@ export default function SeatMapSystem() {
                 <div style={{fontSize:"10px",color:"#94a3b8",marginBottom:"7px"}}>{v.savedAt}</div>
                 <div style={{display:"flex",gap:"5px"}}>
                   <button onClick={()=>restoreVersion(v)} style={{flex:1,padding:"5px",fontSize:"10px",backgroundColor:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",borderRadius:"5px",cursor:"pointer",fontWeight:700}}>복구</button>
-                  {isAdmin&&<button onClick={()=>deleteVersion(v.id)} style={{flex:1,padding:"5px",fontSize:"10px",backgroundColor:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",borderRadius:"5px",cursor:"pointer",fontWeight:700}}>삭제</button>}
+                  <button onClick={()=>deleteVersion(v.id)} style={{flex:1,padding:"5px",fontSize:"10px",backgroundColor:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",borderRadius:"5px",cursor:"pointer",fontWeight:700}}>삭제</button>
                 </div>
               </div>
             ))
@@ -457,7 +501,7 @@ export default function SeatMapSystem() {
         </>}
 
         {/* ── 단축키 ── */}
-        {sideTab==="shortcuts"&&<>
+        {sideTab==="shortcuts"&&isAdmin&&<>
           <span style={slS}>키보드 단축키</span>
           {[["Ctrl+Z","되돌리기"],["Ctrl+D","복제"],["Ctrl+A","전체선택"],["Del","삭제"],["←↑→↓","미세이동 1px"],["Shift+←↑→↓","10px 이동"],["드래그(빈공간)","박스 다중선택"],["Shift+클릭","개별 추가선택"]].map(([k,d])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"5px"}}>
