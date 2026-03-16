@@ -751,12 +751,13 @@ export default function SeatMapSystem() {
         <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"8px",flexWrap:"wrap"}}>
           {/* ☁️ 저장 버튼 — 관리자/비관리자 모두 표시 */}
           <button onClick={handleSaveToServer}
-            disabled={saveStatus==="saving"||saveStatus==="loading"}
+            disabled={saveStatus==="saving"}
             style={{...tbBtnS,
               backgroundColor: saveStatus==="saved"?"#f0fdf4":saveStatus==="error"?"#fef2f2":"#ecfdf5",
               color: saveStatus==="saved"?"#059669":saveStatus==="error"?"#ef4444":"#059669",
               border: saveStatus==="error"?"1px solid #fecaca":"1px solid #d1fae5",
               fontWeight:700,
+              opacity: saveStatus==="saving"?0.6:1,
             }}>
             {saveStatus==="saving"?"저장 중...":saveStatus==="saved"?"✅ 저장됨":saveStatus==="error"?"❌ 오류":"☁️ 저장"}
           </button>
