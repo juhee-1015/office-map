@@ -5,8 +5,9 @@ export async function POST(request: Request) {
   try {
     const data = await request.json();
     const blob = await put('seatmap.json', JSON.stringify(data), {
-      access: 'private',
+      access: 'public',
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
     return NextResponse.json({ ok: true, url: blob.url });
   } catch (e) {
