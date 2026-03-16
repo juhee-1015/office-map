@@ -193,6 +193,7 @@ export default function SeatMapSystem() {
 
   // 구역 그리기 상태
   const [zoneDrawMode, setZoneDrawMode] = useState(false);
+  const [zoneVisible, setZoneVisible] = useState(true);
   const [zoneDrawing, setZoneDrawing] = useState<{sx:number;sy:number;ex:number;ey:number}|null>(null);
   const isZoneDrawing = useRef(false);
 
@@ -649,14 +650,18 @@ export default function SeatMapSystem() {
             <button onClick={duplicateSelected} disabled={!selectedIds.length} style={{...tbBtnS,opacity:selectedIds.length?1:0.4}}>⿻ 복제</button>
             <button onClick={()=>setModal("saveVersion")} style={{...tbBtnS,backgroundColor:"#f0fdf4",color:"#10b981",border:"1px solid #d1fae5"}}>💾 버전저장</button>
             <div style={{width:"1px",height:"20px",backgroundColor:"#e2e8f0"}}/>
+            <button onClick={()=>setEmptyHighlight(p=>!p)}
+              style={{...tbBtnS,backgroundColor:emptyHighlight?"#fef9c3":"#fff",color:emptyHighlight?"#b45309":"#475569",border:emptyHighlight?"1px solid #fde68a":"1px solid #e2e8f0"}}>
+              {emptyHighlight?"⬜ 빈자리 ON":"⬜ 빈자리"}
+            </button>
+            <button onClick={()=>setZoneVisible(p=>!p)}
+              style={{...tbBtnS,backgroundColor:zoneVisible?"#eff6ff":"#fff",color:zoneVisible?"#2563eb":"#475569",border:zoneVisible?"1px solid #bfdbfe":"1px solid #e2e8f0"}}>
+              {zoneVisible?"🗂 구역 ON":"🗂 구역"}
+            </button>
+            <button onClick={handleExport} style={{...tbBtnS,backgroundColor:"#f0fdf4",color:"#059669",border:"1px solid #d1fae5"}}>🖼 PNG</button>
+            {overlappingIds.size>0&&<span style={{fontSize:"11px",color:"#ef4444",backgroundColor:"#fef2f2",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fecaca"}}>⚠ {overlappingIds.size}개 겹침</span>}
+            {zoneDrawMode&&<span style={{fontSize:"11px",color:"#b45309",backgroundColor:"#fef9c3",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fde68a"}}>✏️ 드래그해서 구역 그리기</span>}
           </>}
-          <button onClick={()=>setEmptyHighlight(p=>!p)}
-            style={{...tbBtnS,backgroundColor:emptyHighlight?"#fef9c3":"#fff",color:emptyHighlight?"#b45309":"#475569",border:emptyHighlight?"1px solid #fde68a":"1px solid #e2e8f0"}}>
-            {emptyHighlight?"⬜ 빈자리 ON":"⬜ 빈자리 표시"}
-          </button>
-          <button onClick={handleExport} style={{...tbBtnS,backgroundColor:"#f0fdf4",color:"#059669",border:"1px solid #d1fae5"}}>🖼 PNG 저장</button>
-          {isAdmin&&overlappingIds.size>0&&<span style={{fontSize:"11px",color:"#ef4444",backgroundColor:"#fef2f2",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fecaca"}}>⚠ {overlappingIds.size}개 겹침</span>}
-          {zoneDrawMode&&<span style={{fontSize:"11px",color:"#b45309",backgroundColor:"#fef9c3",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fde68a"}}>✏️ 드래그해서 구역 그리기</span>}
         </div>
 
         {/* ★ canvasRef: overflow hidden 제거, position relative 유지 */}
@@ -673,8 +678,8 @@ export default function SeatMapSystem() {
           onMouseUp={handleCanvasMouseUp}
           onMouseLeave={handleCanvasMouseUp}>
 
-          {/* 구역 (최하단 zIndex:1) */}
-          {curZones.map(zone=>(
+          {/* 구역 (최하단 zIndex:1) — zoneVisible일 때만 표시 */}
+          {zoneVisible&&curZones.map(zone=>(
             <div key={zone.id}
               data-zone="true"
               onClick={e=>{e.stopPropagation();if(isAdmin){setSelectedZoneId(zone.id);setSelectedIds([]);}}}
@@ -805,7 +810,24 @@ export default function SeatMapSystem() {
                 <input value={selZone.name}
                   onChange={e=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,name:e.target.value}:z))}
                   style={inS} placeholder="구역 이름"/>
-                <div style={{marginTop:"8px",display:"flex",gap:"5px",flexWrap:"wrap"}}>
+                {/* 크기 직접 입력 */}
+                <div style={{display:"flex",gap:"4px",marginTop:"8px"}}>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:"9px",color:"#94a3b8",marginBottom:"2px"}}>너비(W)</div>
+                    <input type="number" value={Math.round(selZone.width)}
+                      onChange={e=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,width:Math.max(60,+e.target.value)}:z))}
+                      style={inS}/>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:"9px",color:"#94a3b8",marginBottom:"2px"}}>높이(H)</div>
+                    <input type="number" value={Math.round(selZone.height)}
+                      onChange={e=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,height:Math.max(40,+e.target.value)}:z))}
+                      style={inS}/>
+                  </div>
+                </div>
+                <div style={{fontSize:"9px",color:"#c0c8d6",marginTop:"4px"}}>구역 우하단 핸들로도 크기 조절 가능</div>
+                {/* 색상 */}
+                <div style={{marginTop:"10px",display:"flex",gap:"5px",flexWrap:"wrap"}}>
                   {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899"].map(c=>(
                     <div key={c} onClick={()=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z))}
                       style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",
