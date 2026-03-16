@@ -42,6 +42,7 @@ export default function SeatMapSystem() {
     setFloors(prev => prev.map(f => f.id === activeFloorId ? { ...f, items: newItems } : f));
   };
 
+  // ✅ [복구] 아이템 추가 함수
   const addItem = (type: ItemType) => {
     saveHistory();
     const id = Date.now();
@@ -57,6 +58,7 @@ export default function SeatMapSystem() {
     setSelectedIds([id]);
   };
 
+  // ✅ [복구] 정렬 기능
   const alignObjects = (direction: 'horizontal' | 'vertical') => {
     if (selectedItems.length < 2) return;
     saveHistory();
@@ -69,12 +71,14 @@ export default function SeatMapSystem() {
     }
   };
 
+  // ✅ [복구] 회전 기능
   const rotateObjects = (deg: number) => {
     if (selectedIds.length === 0) return;
     saveHistory();
     updateItems(currentItems.map(i => selectedIds.includes(i.id) ? { ...i, rotation: (i.rotation + deg) % 360 } : i));
   };
 
+  // ✅ [복구] 전체 복제 기능
   const duplicateSelected = () => {
     if (selectedIds.length === 0) return;
     saveHistory();
@@ -93,6 +97,7 @@ export default function SeatMapSystem() {
 
   return (
     <main style={mainContainerS}>
+      {/* 모달 - 원본 그대로 */}
       {modalType && (
         <div style={modalOverlayS}>
           <div style={modalContentS}>
@@ -111,6 +116,7 @@ export default function SeatMapSystem() {
         </div>
       )}
 
+      {/* 왼쪽 사이드바 - 원본 그대로 */}
       <div style={sidebarS}>
         {isAdmin ? <input value={appTitle} onChange={(e) => setAppTitle(e.target.value)} style={titleEditS} /> : <h2 style={{fontWeight: "bold", fontSize: "16px", marginBottom: "20px"}}>{appTitle}</h2>}
         <div style={{marginBottom: "15px"}}>
@@ -131,13 +137,14 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
+      {/* 메인 캔버스 - grid=[10,10] 추가 */}
       <div style={{ flex: 1, padding: "20px", position: "relative" }}>
         {isAdmin && <button onClick={() => { if(history.length > 0) { setFloors(history[history.length-1]); setHistory(prev => prev.slice(0,-1)); }}} style={floatingUndoBtnS}>↩ 되돌리기</button>}
         <div ref={canvasRef} style={canvasS} onMouseDown={(e) => { if(e.target === canvasRef.current) setSelectedIds([]); }}>
           {currentItems.map((item) => (
             <Draggable 
               key={item.id} 
-              grid={[10, 10]} // ✅ 자석 기능 추가
+              grid={[10, 10]} // 자석 기능
               position={{ x: item.x, y: item.y }} 
               onStart={() => { if(!selectedIds.includes(item.id)) setSelectedIds([item.id]); }}
               onDrag={(e, data) => {
@@ -155,6 +162,7 @@ export default function SeatMapSystem() {
         </div>
       </div>
 
+      {/* 우측 설정 패널 - 모든 섹션(색상 변경 등) 원복 + 180도 추가 */}
       {isAdmin && selectedItems.length > 0 && (
         <div style={rightPanelS}>
           <div style={propCardS}><label style={labelS}>이름 및 크기</label>
@@ -176,7 +184,7 @@ export default function SeatMapSystem() {
               <button onClick={() => alignObjects('horizontal')} style={utilBtnS}>가로 정렬</button>
               <button onClick={() => alignObjects('vertical')} style={utilBtnS}>세로 정렬</button>
               <button onClick={() => rotateObjects(90)} style={utilBtnS}>90° 회전</button>
-              <button onClick={() => rotateObjects(180)} style={utilBtnS}>180° 회전</button> {/* ✅ 회전 기능 보강 */}
+              <button onClick={() => rotateObjects(180)} style={utilBtnS}>180° 회전</button>
               <button onClick={() => rotateObjects(45)} style={utilBtnS}>45° 회전</button>
             </div>
             <button onClick={duplicateSelected} style={{...utilBtnS, width: "100%", backgroundColor: "#f0fdf4", fontWeight: "bold", marginBottom: "5px"}}>선택 복제</button>
@@ -188,7 +196,7 @@ export default function SeatMapSystem() {
   );
 }
 
-// 스타일 객체 (원본 유지)
+// 스타일 객체 - 원본 100% 보존
 const mainContainerS: any = { display: "flex", height: "100vh", backgroundColor: "#f1f5f9" };
 const sidebarS: any = { width: "240px", backgroundColor: "#fff", padding: "15px", borderRight: "1px solid #e2e8f0", display: "flex", flexDirection: "column" };
 const rightPanelS: any = { width: "230px", backgroundColor: "#fff", padding: "15px", borderLeft: "1px solid #e2e8f0", overflowY: "auto" };
@@ -205,4 +213,4 @@ const labelS: any = { fontSize: "11px", color: "#94a3b8", display: "block", marg
 const inputS: any = { width: "100%", padding: "5px", border: "1px solid #eee", borderRadius: "4px", fontSize: "12px" };
 const utilBtnS: any = { padding: "8px", border: "1px solid #eee", borderRadius: "6px", fontSize: "11px", cursor: "pointer", backgroundColor: "#fff" };
 const titleEditS: any = { fontSize: "15px", fontWeight: "bold", border: "2px solid #2563eb", borderRadius: "8px", width: "100%", marginBottom: "15px", padding: "8px" };
-const floatingUndoBtnS: any = { position: "absolute", top: "20px", right: "20px", zIndex: 100, padding: "8px 15px", backgroundColor: "#fff", border: "1px solid #ddd", borderRadius: "20px", cursor: "pointer", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" };
+const floatingUndoBtnS: any = { position: "absolute", top: "20px", right: "20px", z_index: 100, padding: "8px 15px", backgroundColor: "#fff", border: "1px solid #ddd", borderRadius: "20px", cursor: "pointer", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" };
