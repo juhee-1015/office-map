@@ -42,9 +42,8 @@ function applyOpacity(color: string, opacity: number): string {
 }
 
 // ─── 스냅 ─────────────────────────────────────────────────
-const SNAP_THRESHOLD = 10;
-const GRID_SIZE = 10;
-const GAP = 1;
+const SNAP_THRESHOLD = 12;
+const GAP = 0; // 좌석 간격 0 = 완전히 붙음
 
 function getSnapPosition(dragging: RoomItem, others: RoomItem[], rawX: number, rawY: number) {
   let bX = rawX, bY = rawY, dX = SNAP_THRESHOLD+1, dY = SNAP_THRESHOLD+1;
@@ -53,21 +52,23 @@ function getSnapPosition(dragging: RoomItem, others: RoomItem[], rawX: number, r
   for (const o of others) {
     if (o.id===dragging.id) continue;
     const oL=o.x,oR=o.x+o.width,oT=o.y,oB=o.y+o.height,oCX=o.x+o.width/2,oCY=o.y+o.height/2;
-    for (const c of [{drag:dL,t:oL},{drag:dL,t:oR+GAP},{drag:dR,t:oR},{drag:dR,t:oL-GAP},{drag:dCX,t:oCX}]) {
+    // X축: 왼쪽끝=왼쪽끝, 왼쪽끝=오른쪽끝(딱붙기), 오른쪽끝=오른쪽끝, 오른쪽끝=왼쪽끝(딱붙기), 중앙=중앙
+    for (const c of [{drag:dL,t:oL},{drag:dL,t:oR},{drag:dR,t:oR},{drag:dR,t:oL},{drag:dCX,t:oCX}]) {
       const d=Math.abs(c.drag-c.t); if(d<dX){dX=d;bX=rawX+(c.t-c.drag);}
     }
-    for (const c of [{drag:dT,t:oT},{drag:dT,t:oB+GAP},{drag:dB,t:oB},{drag:dB,t:oT-GAP},{drag:dCY,t:oCY}]) {
+    // Y축: 위끝=위끝, 위끝=아래끝(딱붙기), 아래끝=아래끝, 아래끝=위끝(딱붙기), 중앙=중앙
+    for (const c of [{drag:dT,t:oT},{drag:dT,t:oB},{drag:dB,t:oB},{drag:dB,t:oT},{drag:dCY,t:oCY}]) {
       const d=Math.abs(c.drag-c.t); if(d<dY){dY=d;bY=rawY+(c.t-c.drag);}
     }
   }
-  if(dX>SNAP_THRESHOLD)bX=Math.round(rawX/GRID_SIZE)*GRID_SIZE;
-  if(dY>SNAP_THRESHOLD)bY=Math.round(rawY/GRID_SIZE)*GRID_SIZE;
+  // 그리드 스냅 제거 — 다른 좌석에 붙지 않을 땐 자유롭게
   return {x:bX,y:bY,snappedX:dX<=SNAP_THRESHOLD,snappedY:dY<=SNAP_THRESHOLD};
 }
 
 function isOverlapping(a: RoomItem, b: RoomItem): boolean {
-  if(a.id===b.id)return false; const m=1;
-  return a.x<b.x+b.width-m&&a.x+a.width>b.x+m&&a.y<b.y+b.height-m&&a.y+a.height>b.y+m;
+  if(a.id===b.id)return false;
+  // 딱 붙은 건 겹침 아님 — 1px 이상 실제로 겹쳐야 감지
+  return a.x+1<b.x+b.width && a.x+a.width-1>b.x && a.y+1<b.y+b.height && a.y+a.height-1>b.y;
 }
 
 function emptyFloor(id: string, displayName: string): FloorInfo {
@@ -160,7 +161,7 @@ function exportToPNG(canvasEl: HTMLElement, title: string, floorName: string) {
 // ─── 메인 ─────────────────────────────────────────────────
 export default function SeatMapSystem() {
   const [hasMounted, setHasMounted] = useState(false);
-  const [appTitle, setAppTitle] = useState("사무실 좌석 배치도");
+  const [appTitle, setAppTitle] = useState("회사 배치도");
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminPassword, setAdminPassword] = useState("1234");
 
@@ -220,6 +221,9 @@ export default function SeatMapSystem() {
   const [sideTab, setSideTab] = useState<SideTab>("floors");
 
   useEffect(()=>{setHasMounted(true);},[]);
+
+  // 브라우저 탭 제목 동기화
+  useEffect(()=>{ document.title = appTitle; },[appTitle]);
 
   const curFloor = useMemo(()=>floors.find(f=>f.id===activeFloorId)||floors[0],[floors,activeFloorId]);
   const curItems = curFloor.items;
