@@ -849,7 +849,7 @@ export default function SeatMapSystem() {
               backgroundColor:"#fafafa",
               backgroundImage:"radial-gradient(#e2e8f0 1px, transparent 1px)",
               backgroundSize:"20px 20px",
-              cursor: zoneDrawMode?"crosshair":"default"}}
+              cursor: zoneDrawMode?"crosshair":"default"}}>
 
           {/* 구역 (최하단 zIndex:1) — zoneVisible일 때만 표시 */}
           {zoneVisible&&curZones.map(zone=>(
