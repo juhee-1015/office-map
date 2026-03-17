@@ -272,8 +272,26 @@ export default function SeatMapSystem() {
   const [boxSel, setBoxSel] = useState<{sx:number;sy:number;ex:number;ey:number}|null>(null);
   const isBoxing = useRef(false);
 
-  // ★ canvasRef: 실제 캔버스 div
+  // ── 줌/패닝 ──────────────────────────────────────────────
+  const [zoom, setZoom] = useState(0.7); // 초기 70% 축소
+  const [pan, setPan] = useState({x:0, y:0});
+  const isPanning = useRef(false);
+  const panStart = useRef({x:0, y:0, px:0, py:0});
+
+  const handleWheel = useCallback((e: WheelEvent)=>{
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? 0.9 : 1.1;
+    setZoom(z => Math.min(2, Math.max(0.2, z * delta)));
+  }, []);
+
+  const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+  useEffect(()=>{
+    const el = viewportRef.current;
+    if(!el) return;
+    el.addEventListener('wheel', handleWheel, {passive: false});
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, [handleWheel]);
 
   type SideTab = "floors"|"versions"|"shortcuts";
   const [sideTab, setSideTab] = useState<SideTab>("floors");
@@ -782,23 +800,56 @@ export default function SeatMapSystem() {
               }}>
               {allowOverlap?"⚠ 겹침허용 ON":"겹침허용"}
             </button>
-            {zoneDrawMode&&<span style={{fontSize:"11px",color:"#b45309",backgroundColor:"#fef9c3",padding:"4px 10px",borderRadius:"20px",border:"1px solid #fde68a"}}>✏️ 드래그해서 구역 그리기</span>}
           </>}
+          {/* 줌 컨트롤 — 항상 표시 */}
+          <div style={{display:"flex",alignItems:"center",gap:"3px",marginLeft:"auto"}}>
+            <button onClick={()=>setZoom(z=>Math.max(0.2,z-0.1))} style={{...tbBtnS,padding:"6px 10px",fontWeight:700,fontSize:"14px"}}>−</button>
+            <span style={{fontSize:"11px",color:"#64748b",minWidth:"40px",textAlign:"center",fontWeight:600}}>{Math.round(zoom*100)}%</span>
+            <button onClick={()=>setZoom(z=>Math.min(2,z+0.1))} style={{...tbBtnS,padding:"6px 10px",fontWeight:700,fontSize:"14px"}}>＋</button>
+            <button onClick={()=>{setZoom(0.7);setPan({x:0,y:0});}} style={{...tbBtnS,fontSize:"10px"}}>리셋</button>
+          </div>
         </div>
+        <div ref={viewportRef}
+          style={{flex:1,borderRadius:"14px",border:"1px solid #e2e8f0",overflow:"hidden",position:"relative",
+            backgroundColor:"#f1f5f9", userSelect:"none",
+            cursor: isPanning.current ? "grabbing" : zoneDrawMode ? "crosshair" : "grab"}}
+          onMouseDown={e=>{
+            // 빈 배경 패닝 (좌석/구역 아닌 곳)
+            const target = e.target as HTMLElement;
+            const isOnItem = target.closest("[data-item]");
+            const isOnZone = target.closest("[data-zone]");
+            if(!isOnItem && !isOnZone && !zoneDrawMode){
+              isPanning.current = true;
+              panStart.current = {x:e.clientX, y:e.clientY, px:pan.x, py:pan.y};
+              e.preventDefault();
+            }
+            handleCanvasMouseDown(e as unknown as React.MouseEvent<HTMLDivElement>);
+          }}
+          onMouseMove={e=>{
+            if(isPanning.current){
+              setPan({x: panStart.current.px+(e.clientX-panStart.current.x), y: panStart.current.py+(e.clientY-panStart.current.y)});
+            }
+            handleCanvasMouseMove(e as unknown as React.MouseEvent<HTMLDivElement>);
+          }}
+          onMouseUp={e=>{
+            isPanning.current = false;
+            handleCanvasMouseUp(e as unknown as React.MouseEvent<HTMLDivElement>);
+          }}
+          onMouseLeave={e=>{
+            isPanning.current = false;
+            handleCanvasMouseUp(e as unknown as React.MouseEvent<HTMLDivElement>);
+          }}>
 
-        {/* ★ canvasRef: overflow hidden 제거, position relative 유지 */}
-        <div ref={canvasRef}
-          style={{flex:1,borderRadius:"14px",border:"1px solid #e2e8f0",position:"relative",
-            backgroundColor:"#fafafa",
-            backgroundImage:"radial-gradient(#e2e8f0 1px, transparent 1px)",
-            backgroundSize:"20px 20px",
-            overflow:"hidden",
-            cursor:zoneDrawMode?"crosshair":"default",
-            userSelect:"none"}}
-          onMouseDown={handleCanvasMouseDown}
-          onMouseMove={handleCanvasMouseMove}
-          onMouseUp={handleCanvasMouseUp}
-          onMouseLeave={handleCanvasMouseUp}>
+          {/* 실제 캔버스 — transform으로 줌/패닝 */}
+          <div ref={canvasRef}
+            style={{position:"absolute",
+              transformOrigin:"0 0",
+              transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,
+              width:"2400px", height:"1600px",
+              backgroundColor:"#fafafa",
+              backgroundImage:"radial-gradient(#e2e8f0 1px, transparent 1px)",
+              backgroundSize:"20px 20px",
+              cursor: zoneDrawMode?"crosshair":"default"}}
 
           {/* 구역 (최하단 zIndex:1) — zoneVisible일 때만 표시 */}
           {zoneVisible&&curZones.map(zone=>(
@@ -919,7 +970,8 @@ export default function SeatMapSystem() {
               </Draggable>
             );
           })}
-        </div>
+          </div>{/* 내부 캔버스 끝 */}
+        </div>{/* 뷰포트 끝 */}
       </div>
 
       {/* ══ 우측 속성 패널 ══ */}
