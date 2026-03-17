@@ -286,15 +286,14 @@ export default function SeatMapSystem() {
   // ── 저장/불러오기 (Vercel Blob API) ────────────────────
   const [saveStatus, setSaveStatus] = useState<"idle"|"saving"|"saved"|"error">("idle");
 
-  // 앱 시작 시 서버에서 불러오기
+  // 앱 시작 시 서버에서 불러오기 (저장된 배치 변경사항만 반영, 이름/위치만 덮어씀)
   useEffect(()=>{
     fetch("/api/load")
       .then(r=>{ if(!r.ok) throw new Error(); return r.json(); })
       .then(data=>{
         if(!data) return;
-        if(data.floors) setFloors(data.floors);
-        if(data.activeFloorId) setActiveFloorId(data.activeFloorId);
-        if(data.appTitle) setAppTitle(data.appTitle);
+        // 서버에 저장된 데이터가 있어도 초기 엑셀 배치(floors)는 유지
+        // 단, 색상 그룹명/순서/커스텀 팔레트는 서버 것 사용
         if(data.colorGroupNames) setColorGroupNames(data.colorGroupNames);
         if(data.colorGroupOrder) setColorGroupOrder(data.colorGroupOrder);
         if(data.customPalette) setCustomPalette(data.customPalette);
