@@ -218,7 +218,7 @@ const INITIAL_DATA = {"floors":[{"id":"F5","displayName":"5층 (아트실)","ite
 
 export default function SeatMapSystem() {
   const [hasMounted, setHasMounted] = useState(false);
-  const [appTitle, setAppTitle] = useState(INITIAL_DATA.appTitle);
+  const [appTitle, setAppTitle] = useState<string>(INITIAL_DATA.appTitle as string);
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminPassword, setAdminPassword] = useState("1234");
 
