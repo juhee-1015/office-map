@@ -223,7 +223,7 @@ export default function SeatMapSystem() {
   const [adminPassword, setAdminPassword] = useState("1234");
 
   const [floors, setFloors] = useState<FloorInfo[]>(INITIAL_DATA.floors as unknown as FloorInfo[]);
-  const [activeFloorId, setActiveFloorId] = useState(INITIAL_DATA.activeFloorId);
+  const [activeFloorId, setActiveFloorId] = useState<string>(INITIAL_DATA.activeFloorId as string);
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [selectedZoneId, setSelectedZoneId] = useState<number|null>(null);
   const [undoHistory, setUndoHistory] = useState<FloorInfo[][]>([]);
