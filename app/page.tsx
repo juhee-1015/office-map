@@ -257,8 +257,9 @@ export default function SeatMapSystem() {
 
   const [snapGuides, setSnapGuides] = useState<{x?:number;y?:number}>({});
   const [overlappingIds, setOverlappingIds] = useState<Set<number>>(new Set());
-  const [allowOverlap, setAllowOverlap] = useState(false); // 겹침 허용 토글
-  const [searchQuery, setSearchQuery] = useState(""); // 검색어
+  const [allowOverlap, setAllowOverlap] = useState(false);
+  const clipboard = useRef<RoomItem[]>([]); // 클립보드 (Ctrl+C/V용)
+  const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<{floorId:string;floorName:string;item:RoomItem}[]>([]);
   const [searchHighlightId, setSearchHighlightId] = useState<number|null>(null); // 검색으로 찾은 좌석
 
@@ -489,9 +490,12 @@ export default function SeatMapSystem() {
   // zoneDrawMode면 구역 그리기, 아니면 박스셀렉션
   // 단, 좌석/구역 클릭은 각 요소의 onClick에서 처리하므로 여기선 "빈 공간 클릭"만 처리
   const getCanvasPos=(e:React.MouseEvent|MouseEvent)=>{
-    if(!canvasRef.current)return{x:0,y:0};
-    const r=canvasRef.current.getBoundingClientRect();
-    return{x:e.clientX-r.left,y:e.clientY-r.top};
+    if(!viewportRef.current)return{x:0,y:0};
+    const r=viewportRef.current.getBoundingClientRect();
+    // 뷰포트 기준 마우스 위치를 줌/패닝 역변환
+    const x=(e.clientX-r.left-pan.x)/zoom;
+    const y=(e.clientY-r.top-pan.y)/zoom;
+    return{x,y};
   };
 
   const handleCanvasMouseDown=(e:React.MouseEvent<HTMLDivElement>)=>{
@@ -564,24 +568,76 @@ export default function SeatMapSystem() {
   // 키보드
   useEffect(()=>{
     const h=(e:KeyboardEvent)=>{
-      if(!isAdmin)return;
-      if((e.ctrlKey||e.metaKey)&&e.key==="z"){e.preventDefault();if(undoHistory.length>0){setFloors(undoHistory[undoHistory.length-1]);setUndoHistory(p=>p.slice(0,-1));}}
-      if((e.ctrlKey||e.metaKey)&&e.key==="d"){e.preventDefault();duplicateSelected();}
-      if((e.ctrlKey||e.metaKey)&&e.key==="a"){e.preventDefault();selectAll();}
-      if(e.key==="Escape"){setZoneDrawMode(false);isZoneDrawing.current=false;setZoneDrawing(null);}
-      if((e.key==="Delete"||e.key==="Backspace")&&document.activeElement?.tagName!=="INPUT"){
+      if(!isAdmin) return;
+      const tag = (document.activeElement as HTMLElement)?.tagName;
+      const inInput = tag==="INPUT"||tag==="TEXTAREA";
+
+      // Ctrl+Z 되돌리기
+      if((e.ctrlKey||e.metaKey)&&e.key==="z"&&!e.shiftKey){
+        e.preventDefault();
+        setUndoHistory(prev=>{
+          if(prev.length===0) return prev;
+          const last=prev[prev.length-1];
+          setFloors(last);
+          return prev.slice(0,-1);
+        });
+        return;
+      }
+      // Ctrl+C 복사
+      if((e.ctrlKey||e.metaKey)&&e.key==="c"){
+        if(inInput) return;
+        e.preventDefault();
+        const copied=curItems.filter(i=>selectedIds.includes(i.id));
+        if(copied.length>0) clipboard.current=JSON.parse(JSON.stringify(copied));
+        return;
+      }
+      // Ctrl+V 붙여넣기
+      if((e.ctrlKey||e.metaKey)&&e.key==="v"){
+        if(inInput) return;
+        e.preventDefault();
+        if(clipboard.current.length===0) return;
+        saveHistory();
+        const newIds:number[]=[];
+        const pasted=clipboard.current.map(item=>{
+          const nid=Date.now()+Math.random();
+          newIds.push(nid);
+          return{...item,id:nid,x:item.x+20,y:item.y+20};
+        });
+        updateItems([...curItems,...pasted]);
+        setSelectedIds(newIds);
+        return;
+      }
+      // Ctrl+A 전체선택
+      if((e.ctrlKey||e.metaKey)&&e.key==="a"){
+        if(inInput) return;
+        e.preventDefault();
+        selectAll();
+        return;
+      }
+      // Escape
+      if(e.key==="Escape"){
+        setZoneDrawMode(false);isZoneDrawing.current=false;setZoneDrawing(null);
+        return;
+      }
+      // Delete/Backspace
+      if((e.key==="Delete"||e.key==="Backspace")&&!inInput){
         if(selectedZoneId!==null){saveHistory();updateZones(curZones.filter(z=>z.id!==selectedZoneId));setSelectedZoneId(null);}
         else if(selectedIds.length){saveHistory();updateItems(curItems.filter(i=>!selectedIds.includes(i.id)));setSelectedIds([]);}
+        return;
       }
-      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&selectedIds.length&&document.activeElement?.tagName!=="INPUT"){
-        e.preventDefault();const step=e.shiftKey?10:1;
+      // 화살표 이동
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&selectedIds.length&&!inInput){
+        e.preventDefault();
+        const step=e.shiftKey?10:1;
         const dx=e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0;
         const dy=e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0;
         updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i));
+        return;
       }
     };
-    window.addEventListener("keydown",h);return()=>window.removeEventListener("keydown",h);
-  },[isAdmin,undoHistory,selectedIds,selectedZoneId,curItems,curZones,duplicateSelected,saveHistory,updateItems,updateZones]);
+    window.addEventListener("keydown",h);
+    return()=>window.removeEventListener("keydown",h);
+  },[isAdmin,selectedIds,selectedZoneId,curItems,curZones,selectAll,saveHistory,updateItems,updateZones]);
 
   if(!hasMounted)return null;
   const selZone=curZones.find(z=>z.id===selectedZoneId);
@@ -795,7 +851,7 @@ export default function SeatMapSystem() {
 
         {isAdmin&&sideTab==="shortcuts"&&<>
           <span style={slS}>⌨️ 단축키</span>
-          {[["Ctrl+Z","되돌리기"],["Ctrl+D","복제"],["Ctrl+A","전체선택"],["Del","삭제"],["Esc","구역그리기 취소"],["←↑→↓","미세이동 1px"],["Shift+화살표","10px 이동"],["드래그(빈공간)","박스 다중선택"],["Shift+클릭","개별 추가선택"]].map(([k,d])=>(
+          {[["Ctrl+Z","되돌리기"],["Ctrl+C","복사"],["Ctrl+V","붙여넣기"],["Ctrl+A","전체선택"],["Del","삭제"],["Esc","구역그리기 취소"],["←↑→↓","미세이동 1px"],["Shift+화살표","10px 이동"],["드래그(빈공간)","박스 다중선택"],["Shift+클릭","개별 추가선택"]].map(([k,d])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"5px"}}>
               <code style={{fontSize:"9px",backgroundColor:"#e2e8f0",padding:"2px 5px",borderRadius:"3px",color:"#475569"}}>{k}</code>
               <span style={{fontSize:"10px",color:"#94a3b8"}}>{d}</span>
@@ -982,12 +1038,14 @@ export default function SeatMapSystem() {
             const borderColor=isSearchHl?"#f59e0b":isSel?"#2563eb":isOv?"#ef4444":isEmptyHl?"#f59e0b":"rgba(0,0,0,0.08)";
             return (
               <Draggable key={item.id} position={{x:item.x,y:item.y}}
+                scale={zoom}
                 onStart={(_e,_data)=>{
                   if(!isAdmin)return false;
                   if(!isSel)setSelectedIds([item.id]);
                   setSelectedZoneId(null);
                 }}
                 onDrag={(_e,data)=>{
+                  // data.x/y는 transform 전 좌표 — 줌 보정 불필요 (Draggable이 이미 처리)
                   const dx=data.x-item.x,dy=data.y-item.y;
                   const ids=isSel?selectedIds:[item.id];
                   const moved=curItems.map(i=>ids.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i);
@@ -1182,7 +1240,7 @@ export default function SeatMapSystem() {
               <div style={pcS}>
                 <div style={slS}>🛠 편집</div>
                 <button onClick={duplicateSelected}
-                  style={{width:"100%",padding:"8px",border:"1px solid #d1fae5",borderRadius:"6px",fontSize:"12px",cursor:"pointer",backgroundColor:"#ecfdf5",color:"#10b981",fontWeight:700,marginBottom:"5px"}}>⿻ 복제 (Ctrl+D)</button>
+                  style={{width:"100%",padding:"8px",border:"1px solid #d1fae5",borderRadius:"6px",fontSize:"12px",cursor:"pointer",backgroundColor:"#ecfdf5",color:"#10b981",fontWeight:700,marginBottom:"5px"}}>⿻ 복제 (Ctrl+C → Ctrl+V)</button>
                 <button onClick={()=>{saveHistory();updateItems(curItems.filter(i=>!selectedIds.includes(i.id)));setSelectedIds([]);}}
                   style={{width:"100%",padding:"8px",border:"1px solid #fecaca",borderRadius:"6px",fontSize:"12px",cursor:"pointer",backgroundColor:"#fef2f2",color:"#ef4444",fontWeight:700}}>🗑 삭제 (Del)</button>
               </div>
