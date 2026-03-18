@@ -4,7 +4,7 @@ import React, { useState, useRef, useMemo, useEffect, useCallback } from "react"
 import Draggable from "react-draggable";
 
 // ─── 타입 ─────────────────────────────────────────────────
-type ItemType = "seat" | "wall" | "door";
+type ItemType = "seat" | "wall" | "door" | "space";
 interface RoomItem {
   id: number; type: ItemType; name: string; rotation: number;
   color: string; textColor: string; opacity: number; textOpacity: number;
@@ -404,10 +404,11 @@ export default function SeatMapSystem() {
   const addItem=(type:ItemType)=>{
     saveHistory();
     const id=Date.now();
-    const col=type==="seat"?departments[0].color:type==="wall"?"#475569":"#64748b";
-    updateItems([...curItems,{id,type,name:type==="seat"?"새 좌석":type==="wall"?"":"출입문",
-      rotation:0,color:col,textColor:"#ffffff",opacity:1,textOpacity:1,
-      width:type==="wall"?150:type==="door"?60:30,height:type==="wall"?12:type==="door"?60:60,x:130,y:130}]);
+    const col=type==="seat"?departments[0].color:type==="wall"?"#475569":type==="space"?"#e2e8f0":"#64748b";
+    const name=type==="seat"?"새 좌석":type==="wall"?"":type==="space"?"공간":"출입문";
+    const w=type==="wall"?150:type==="door"?60:type==="space"?200:30;
+    const h=type==="wall"?12:type==="door"?60:type==="space"?120:60;
+    updateItems([...curItems,{id,type,name,rotation:0,color:col,textColor:"#475569",opacity:1,textOpacity:1,width:w,height:h,x:130,y:130}]);
     setSelectedIds([id]);
   };
 
@@ -565,70 +566,31 @@ export default function SeatMapSystem() {
     isBoxing.current=false;
   };
 
-  // 키보드 단축키
+  // 키보드 단축키 — 매 렌더마다 최신 클로저로 재등록
   useEffect(()=>{
-    if(!hasMounted||!isAdmin) return;
+    if(!hasMounted) return;
     const h=(e:KeyboardEvent)=>{
+      if(!isAdmin) return;
       const tag=(document.activeElement as HTMLElement)?.tagName;
       const inInput=tag==="INPUT"||tag==="TEXTAREA";
-      // Ctrl+Z 되돌리기
-      if((e.ctrlKey||e.metaKey)&&e.key==="z"&&!e.shiftKey){
-        e.preventDefault();
-        if(undoHistory.length===0) return;
-        setFloors(undoHistory[undoHistory.length-1]);
-        setUndoHistory(p=>p.slice(0,-1));
-        return;
-      }
+      const ctrl=e.ctrlKey||e.metaKey;
+      // Ctrl+Z
+      if(ctrl&&e.key==="z"){e.preventDefault();if(undoHistory.length){setFloors(undoHistory[undoHistory.length-1]);setUndoHistory(p=>p.slice(0,-1));}return;}
       // Ctrl+D 복제
-      if((e.ctrlKey||e.metaKey)&&e.key==="d"){
-        if(inInput) return;
-        e.preventDefault();
-        if(!selectedIds.length) return;
-        setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(curItems))]);
-        const newIds:number[]=[];
-        const duped=curItems.filter(i=>selectedIds.includes(i.id)).map(i=>{
-          const nid=Date.now()+Math.floor(Math.random()*99999);
-          newIds.push(nid);
-          return{...i,id:nid,x:i.x+20,y:i.y+20};
-        });
-        setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:[...f.items,...duped]}:f));
-        setSelectedIds(newIds);
-        return;
-      }
-      // Ctrl+A 전체선택
-      if((e.ctrlKey||e.metaKey)&&e.key==="a"){
-        if(inInput) return;
-        e.preventDefault();
-        setSelectedIds(curItems.map(i=>i.id));
-        return;
-      }
+      if(ctrl&&e.key==="d"){if(inInput)return;e.preventDefault();if(!selectedIds.length)return;const snap=JSON.parse(JSON.stringify(curItems));setUndoHistory(p=>[...p.slice(-29),snap]);const nids:number[]=[];const dd=curItems.filter(i=>selectedIds.includes(i.id)).map(i=>{const nid=Date.now()+Math.floor(Math.random()*99999);nids.push(nid);return{...i,id:nid,x:i.x+20,y:i.y+20};});setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:[...f.items,...dd]}:f));setSelectedIds(nids);return;}
+      // Ctrl+A
+      if(ctrl&&e.key==="a"){if(inInput)return;e.preventDefault();setSelectedIds(curItems.map(i=>i.id));return;}
       // Escape
-      if(e.key==="Escape"){
-        setZoneDrawMode(false);isZoneDrawing.current=false;setZoneDrawing(null);
-        return;
-      }
-      // Delete/Backspace
+      if(e.key==="Escape"){setZoneDrawMode(false);isZoneDrawing.current=false;setZoneDrawing(null);return;}
+      // Delete
       if((e.key==="Delete"||e.key==="Backspace")&&!inInput){
-        if(selectedZoneId!==null){
-          setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(curItems))]);
-          setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,zones:curZones.filter(z=>z.id!==selectedZoneId)}:f));
-          setSelectedZoneId(null);
-        } else if(selectedIds.length){
-          setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(curItems))]);
-          setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:curItems.filter(i=>!selectedIds.includes(i.id))}:f));
-          setSelectedIds([]);
-        }
+        const snap=JSON.parse(JSON.stringify(curItems));
+        if(selectedZoneId!==null){setUndoHistory(p=>[...p.slice(-29),snap]);setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,zones:curZones.filter(z=>z.id!==selectedZoneId)}:f));setSelectedZoneId(null);}
+        else if(selectedIds.length){setUndoHistory(p=>[...p.slice(-29),snap]);setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:curItems.filter(i=>!selectedIds.includes(i.id))}:f));setSelectedIds([]);}
         return;
       }
-      // 화살표 이동
-      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&selectedIds.length&&!inInput){
-        e.preventDefault();
-        const step=e.shiftKey?10:1;
-        const dx=e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0;
-        const dy=e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0;
-        setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:f.items.map(i=>selectedIds.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i)}:f));
-        return;
-      }
+      // 화살표
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&selectedIds.length&&!inInput){e.preventDefault();const s=e.shiftKey?10:1;const dx=e.key==="ArrowLeft"?-s:e.key==="ArrowRight"?s:0;const dy=e.key==="ArrowUp"?-s:e.key==="ArrowDown"?s:0;setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:f.items.map(i=>selectedIds.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i)}:f));return;}
     };
     window.addEventListener("keydown",h,true);
     return()=>window.removeEventListener("keydown",h,true);
@@ -698,7 +660,13 @@ export default function SeatMapSystem() {
           <input
             value={searchQuery}
             onChange={e=>handleSearch(e.target.value)}
-            placeholder="🔍 이름 검색..."
+            onKeyDown={e=>{
+              if(e.key==="Enter"&&searchResults.length>0){
+                handleSearchResultClick(searchResults[0].floorId,searchResults[0].item.id);
+              }
+              if(e.key==="Escape"){setSearchQuery("");setSearchResults([]);}
+            }}
+            placeholder="🔍 이름 검색... (Enter로 이동)"
             style={{width:"100%",padding:"7px 10px",border:"1.5px solid #e2e8f0",borderRadius:"8px",fontSize:"12px",boxSizing:"border-box",outline:"none"}}
           />
           {searchResults.length>0&&(
@@ -859,6 +827,7 @@ export default function SeatMapSystem() {
             <button onClick={()=>addItem("seat")} style={addBtnS("#eff6ff","#2563eb","#dbeafe")}>🪑 좌석 추가</button>
             <button onClick={()=>addItem("wall")} style={addBtnS("#f8fafc","#475569","#e2e8f0")}>🧱 벽체 추가</button>
             <button onClick={()=>addItem("door")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🚪 문 추가</button>
+            <button onClick={()=>addItem("space")} style={addBtnS("#f0f9ff","#0ea5e9","#bae6fd")}>🏠 공간 추가</button>
             <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}}
               style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>
               {zoneDrawMode?"✏️ 그리는 중... (Esc취소)":"🗂 구역 추가"}
@@ -1057,8 +1026,8 @@ export default function SeatMapSystem() {
                 onStop={()=>{saveHistory();setSnapGuides({});}}
                 disabled={!isAdmin}>
                 {/* ★ data-item 속성: 이 요소 위 클릭/드래그를 구분하는 데 사용 */}
-                <div data-item="true"
-                  style={{position:"absolute",zIndex:isSel?100:10,cursor:isAdmin?"grab":"default"}}
+                  <div data-item="true"
+                  style={{position:"absolute",zIndex:item.type==="space"?2:isSel?100:10,cursor:isAdmin?"grab":"default"}}
                   onClick={e=>{
                     if(!isAdmin)return;
                     e.stopPropagation();
@@ -1067,6 +1036,17 @@ export default function SeatMapSystem() {
                   }}>
                   {item.type==="door"
                     ?<DoorShape w={item.width} h={item.height} color={item.color} rotation={item.rotation} name={item.name} isSelected={isSel}/>
+                    :item.type==="space"
+                    ?<div style={{
+                        width:item.width,height:item.height,
+                        backgroundColor:hexToRgba(item.color,0.25),
+                        border:`${isSel?"2":"1"}px ${isSel?"solid":"dashed"} ${isSel?"#2563eb":item.color}`,
+                        borderRadius:"8px",
+                        display:"flex",alignItems:"center",justifyContent:"center",
+                        color:item.color,fontSize:"12px",fontWeight:700,
+                        boxShadow:isSel?"0 0 0 3px rgba(37,99,235,0.2)":"none",
+                        userSelect:"none",
+                      }}>{item.name}</div>
                     :<div style={{
                         transform:`rotate(${item.rotation}deg)`,
                         width:item.width,height:item.height,
