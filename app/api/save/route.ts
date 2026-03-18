@@ -4,9 +4,11 @@ import { NextResponse } from 'next/server';
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const blob = await put('seatmap.json', JSON.stringify(data), {
+    // 항상 같은 이름으로 덮어쓰기
+    const blob = await put('seatmap-data.json', JSON.stringify(data), {
       access: 'public',
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
     return NextResponse.json({ ok: true, url: blob.url });
   } catch (e) {
