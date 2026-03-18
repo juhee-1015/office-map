@@ -38,22 +38,17 @@ function emptyFloor(id:string,name:string):FloorInfo{return{id,displayName:name,
 function exportToPNG(el:HTMLElement,title:string,floorName:string){const w=window.open("","_blank");if(!w)return;w.document.write(`<html><head><title>${title}_${floorName}</title><style>body{margin:0;padding:16px;background:#fafafa;}*{font-family:'Apple SD Gothic Neo',sans-serif;box-sizing:border-box;}</style></head><body>${el.outerHTML}</body></html>`);w.document.close();setTimeout(()=>{w.print();},600);}
 
 function DoorShape({w,h,color,rotation,name,isSelected}:{w:number;h:number;color:string;rotation:number;name:string;isSelected:boolean}){
-  // 문: 사각형(문짝) + 1/4 원호(열리는 궤적)
-  const arcR=Math.min(w,h);
+  const arc=Math.min(w,h);
   return(
-    <div style={{width:w,height:h,transform:`rotate(${rotation}deg)`,position:"relative",display:"block"}}>
+    <div style={{width:w,height:h,transform:`rotate(${rotation}deg)`,position:"relative"}}>
       <svg width={w} height={h} style={{position:"absolute",top:0,left:0,overflow:"visible"}}>
-        {/* 열리는 궤적 (1/4 원호) */}
-        <path d={`M 0 0 A ${arcR} ${arcR} 0 0 1 ${arcR} ${arcR}`}
-          fill={hexToRgba(color,0.12)} stroke={color} strokeWidth="1.5" strokeDasharray="4,3"/>
-        {/* 문짝 */}
-        <rect x="0" y="0" width={w*0.15} height={arcR} rx="2"
-          fill={isSelected?"#dbeafe":color} stroke={isSelected?"#2563eb":color} strokeWidth={isSelected?2:1}/>
-        {/* 힌지 점 */}
+        <path d={`M 0 ${arc} A ${arc} ${arc} 0 0 1 ${arc} 0`}
+          fill={hexToRgba(color,0.15)} stroke={color} strokeWidth="1.5" strokeDasharray="5,3"/>
+        <line x1="0" y1="0" x2="0" y2={arc} stroke={color} strokeWidth="4" strokeLinecap="round"/>
         <circle cx="0" cy="0" r="3" fill={color}/>
-        {isSelected&&<rect x="-2" y="-2" width={w+4} height={h+4} fill="none" stroke="#2563eb" strokeWidth="1.5" strokeDasharray="4,2" rx="3"/>}
+        {isSelected&&<rect x="-3" y="-3" width={w+6} height={h+6} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="5,3" rx="4"/>}
       </svg>
-      {name&&<span style={{position:"absolute",bottom:"2px",left:0,right:0,textAlign:"center",fontSize:"9px",fontWeight:700,color:"#fff",textShadow:"0 1px 2px rgba(0,0,0,0.6)",pointerEvents:"none",lineHeight:1}}>{name}</span>}
+      {name&&<div style={{position:"absolute",top:"50%",left:0,right:0,transform:"translateY(-50%)",textAlign:"center",fontSize:"10px",fontWeight:800,color:color,pointerEvents:"none",textShadow:"0 0 4px #fff,0 0 4px #fff"}}>{name}</div>}
     </div>
   );
 }
@@ -92,6 +87,10 @@ export default function SeatMapSystem() {
   const [editingColorHex,setEditingColorHex]=useState<string|null>(null);
   const [modal,setModal]=useState<"login"|"changePw"|"saveVersion"|null>(null);
   const [mInput,setMInput]=useState("");
+  const [mInput2,setMInput2]=useState("");
+  const [pwCurrent,setPwCurrent]=useState("");
+  const [pwNew,setPwNew]=useState("");
+  const [pwErr,setPwErr]=useState("");
   const [mErr,setMErr]=useState("");
   const [versionLabel,setVersionLabel]=useState("");
   const [versions,setVersions]=useState<VersionSnapshot[]>([]);
@@ -302,7 +301,7 @@ export default function SeatMapSystem() {
   const selItems=curItems.filter(i=>selectedIds.includes(i.id));
 
   return(
-    <main style={{display:"flex",height:"100vh",backgroundColor:"#f1f5f9",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif"}}>
+    <main style={{display:"flex",height:"100vh",backgroundColor:"#f1f5f9",fontFamily:"'Pretendard','Apple SD Gothic Neo',sans-serif",outline:"none"}} tabIndex={-1}>
 
       {/* ── 모달 ── */}
       {modal&&(
@@ -321,11 +320,13 @@ export default function SeatMapSystem() {
             {modal==="changePw"&&<>
               <div style={{fontSize:"26px",marginBottom:"6px"}}>🔑</div>
               <h3 style={{fontWeight:700,fontSize:"15px",marginBottom:"14px",color:"#1e293b"}}>비밀번호 변경</h3>
-              <input type="password" value={mInput} onChange={e=>{setMInput(e.target.value);setMErr("");}} placeholder="새 비밀번호" style={miS}/>
+              <input type="password" value={mInput} onChange={e=>{setMInput(e.target.value);setMErr("");}} placeholder="현재 비밀번호" style={{...miS,marginBottom:"8px"}} autoFocus/>
+              <input type="password" value={mInput2} onChange={e=>{setMInput2(e.target.value);setMErr("");}} placeholder="새 비밀번호" style={miS}
+                onKeyDown={e=>{if(e.key==="Enter"){if(mInput!==adminPassword){setMErr("현재 비밀번호가 틀렸습니다");}else if(mInput2.length<4){setMErr("새 비밀번호는 4자 이상");}else{setAdminPassword(mInput2);setModal(null);setMInput("");setMInput2("");}  }}}/>
               {mErr&&<p style={{color:"#ef4444",fontSize:"12px",marginTop:"6px"}}>{mErr}</p>}
               <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"14px"}}>
-                <button onClick={()=>{if(mInput.length<4){setMErr("4자 이상 입력하세요");}else{setAdminPassword(mInput);setModal(null);setMInput("");}}} style={okBtnS}>변경</button>
-                <button onClick={()=>{setModal(null);setMInput("");setMErr("");}} style={cxBtnS}>취소</button>
+                <button onClick={()=>{if(mInput!==adminPassword){setMErr("현재 비밀번호가 틀렸습니다");}else if(mInput2.length<4){setMErr("새 비밀번호는 4자 이상");}else{setAdminPassword(mInput2);setModal(null);setMInput("");setMInput2("");}}} style={okBtnS}>변경</button>
+                <button onClick={()=>{setModal(null);setMInput("");setMInput2("");setMErr("");}} style={cxBtnS}>취소</button>
               </div>
             </>}
             {modal==="saveVersion"&&<>
@@ -484,7 +485,7 @@ export default function SeatMapSystem() {
             style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>
             {zoneDrawMode?"✏️ 그리는 중... (Esc취소)":"🗂 구역 추가"}
           </button>
-          <button onClick={()=>setModal("changePw")} style={{padding:"7px",width:"100%",backgroundColor:"#f8fafc",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:600,marginBottom:"6px"}}>🔑 비밀번호 변경</button>
+
         </div>}
 
         <button onClick={()=>isAdmin?setIsAdmin(false):setModal("login")}
@@ -754,9 +755,21 @@ export default function SeatMapSystem() {
               </div>
             </div>
           ):(
-            <div style={{textAlign:"center",padding:"20px 0",color:"#94a3b8"}}>
-              <div style={{fontSize:"24px",marginBottom:"8px"}}>👆</div>
-              <div style={{fontSize:"11px"}}>좌석을 클릭하거나<br/>드래그로 다중 선택</div>
+            <div>
+              <div style={{textAlign:"center",padding:"16px 0 12px",color:"#94a3b8"}}>
+                <div style={{fontSize:"24px",marginBottom:"8px"}}>👆</div>
+                <div style={{fontSize:"11px"}}>좌석을 클릭하거나<br/>드래그로 다중 선택</div>
+              </div>
+              {/* 비밀번호 변경 */}
+              <div style={{...pcS,marginTop:"8px"}}>
+                <div style={slS}>🔑 비밀번호 변경</div>
+                <input type="password" placeholder="현재 비밀번호" value={pwCurrent} onChange={e=>setPwCurrent(e.target.value)} style={{...inS,marginBottom:"6px"}}/>
+                <input type="password" placeholder="새 비밀번호" value={pwNew} onChange={e=>setPwNew(e.target.value)} style={{...inS,marginBottom:"6px"}}
+                  onKeyDown={e=>{if(e.key==="Enter"){if(pwCurrent!==adminPassword){setPwErr("현재 비밀번호 오류");}else if(pwNew.length<4){setPwErr("4자 이상 입력");}else{setAdminPassword(pwNew);setPwCurrent("");setPwNew("");setPwErr("✅ 변경 완료!");}  }}}/>
+                {pwErr&&<p style={{fontSize:"11px",color:pwErr.startsWith("✅")?"#059669":"#ef4444",margin:"0 0 6px"}}>{pwErr}</p>}
+                <button onClick={()=>{if(pwCurrent!==adminPassword){setPwErr("현재 비밀번호 오류");}else if(pwNew.length<4){setPwErr("4자 이상 입력");}else{setAdminPassword(pwNew);setPwCurrent("");setPwNew("");setPwErr("✅ 변경 완료!");}}}
+                  style={{width:"100%",padding:"7px",backgroundColor:"#1e293b",color:"#fff",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:700}}>변경</button>
+              </div>
             </div>
           )}
         </div>
