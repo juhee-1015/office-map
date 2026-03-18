@@ -16,10 +16,22 @@ function colorToHex(c:string):string{if(c.startsWith("#"))return c;if(c.startsWi
 function colorToOpacity(c:string):number{return c.startsWith("rgba")?rgbaToHexOpacity(c).opacity:1;}
 function applyOpacity(color:string,opacity:number):string{return hexToRgba(colorToHex(color),opacity);}
 
-const SNAP_THRESHOLD=18;
+const SNAP_THRESHOLD=6;
 function effectiveWH(item:RoomItem):{w:number;h:number}{const r=((item.rotation%360)+360)%360;return(r===90||r===270)?{w:item.height,h:item.width}:{w:item.width,h:item.height};}
 function getBBox(item:RoomItem,ox:number,oy:number):{l:number;r:number;t:number;b:number}{const{w,h}=effectiveWH(item);const cx=ox+item.width/2,cy=oy+item.height/2;return{l:cx-w/2,r:cx+w/2,t:cy-h/2,b:cy+h/2};}
-function getSnapPosition(item:RoomItem,others:RoomItem[],ox:number,oy:number):{x:number;y:number;snappedX:boolean;snappedY:boolean}{let sx=ox,sy=oy,snappedX=false,snappedY=false;const b=getBBox(item,ox,oy);for(const o of others){const ob2=getBBox(o,o.x,o.y);const dx=Math.min(Math.abs(b.l-ob2.l),Math.abs(b.l-ob2.r),Math.abs(b.r-ob2.l),Math.abs(b.r-ob2.r));const dy=Math.min(Math.abs(b.t-ob2.t),Math.abs(b.t-ob2.b),Math.abs(b.b-ob2.t),Math.abs(b.b-ob2.b));if(dx<SNAP_THRESHOLD&&!snappedX){if(Math.abs(b.l-ob2.l)<SNAP_THRESHOLD){sx=ob2.l-(b.l-ox);snappedX=true;}else if(Math.abs(b.l-ob2.r)<SNAP_THRESHOLD){sx=ob2.r-(b.l-ox);snappedX=true;}else if(Math.abs(b.r-ob2.l)<SNAP_THRESHOLD){sx=ob2.l-(b.r-ox);snappedX=true;}else if(Math.abs(b.r-ob2.r)<SNAP_THRESHOLD){sx=ob2.r-(b.r-ox);snappedX=true;}}if(dy<SNAP_THRESHOLD&&!snappedY){if(Math.abs(b.t-ob2.t)<SNAP_THRESHOLD){sy=ob2.t-(b.t-oy);snappedY=true;}else if(Math.abs(b.t-ob2.b)<SNAP_THRESHOLD){sy=ob2.b-(b.t-oy);snappedY=true;}else if(Math.abs(b.b-ob2.t)<SNAP_THRESHOLD){sy=ob2.t-(b.b-oy);snappedY=true;}else if(Math.abs(b.b-ob2.b)<SNAP_THRESHOLD){sy=ob2.b-(b.b-oy);snappedY=true;}}}return{x:sx,y:sy,snappedX,snappedY};}
+function getSnapPosition(item:RoomItem,others:RoomItem[],ox:number,oy:number):{x:number;y:number;snappedX:boolean;snappedY:boolean}{
+  let sx=ox,sy=oy,snappedX=false,snappedY=false;
+  const b=getBBox(item,ox,oy);
+  let bestDx=SNAP_THRESHOLD,bestDy=SNAP_THRESHOLD;
+  for(const o of others){
+    const ob2=getBBox(o,o.x,o.y);
+    const xc=[{d:Math.abs(b.l-ob2.l),v:ob2.l-(b.l-ox)},{d:Math.abs(b.l-ob2.r),v:ob2.r-(b.l-ox)},{d:Math.abs(b.r-ob2.l),v:ob2.l-(b.r-ox)},{d:Math.abs(b.r-ob2.r),v:ob2.r-(b.r-ox)}];
+    for(const c of xc){if(c.d<bestDx){bestDx=c.d;sx=c.v;snappedX=true;}}
+    const yc=[{d:Math.abs(b.t-ob2.t),v:ob2.t-(b.t-oy)},{d:Math.abs(b.t-ob2.b),v:ob2.b-(b.t-oy)},{d:Math.abs(b.b-ob2.t),v:ob2.t-(b.b-oy)},{d:Math.abs(b.b-ob2.b),v:ob2.b-(b.b-oy)}];
+    for(const c of yc){if(c.d<bestDy){bestDy=c.d;sy=c.v;snappedY=true;}}
+  }
+  return{x:sx,y:sy,snappedX,snappedY};
+}
 function isOverlapping(a:RoomItem,b:RoomItem):boolean{const ba=getBBox(a,a.x,a.y),bb=getBBox(b,b.x,b.y);return ba.l<bb.r-1&&ba.r>bb.l+1&&ba.t<bb.b-1&&ba.b>bb.t+1;}
 function emptyFloor(id:string,name:string):FloorInfo{return{id,displayName:name,items:[],zones:[]};}
 
@@ -429,22 +441,26 @@ export default function SeatMapSystem() {
             ))}
           </>}
 
-          {/* 좌석 추가 버튼들 */}
-          <div style={{marginTop:"8px"}}>
-            <button onClick={()=>addItem("seat")} style={addBtnS("#eff6ff","#2563eb","#bfdbfe")}>🪑 좌석 추가</button>
-            <button onClick={()=>addItem("wall")} style={addBtnS("#f8fafc","#475569","#e2e8f0")}>🧱 벽체 추가</button>
-            <button onClick={()=>addItem("door")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🚪 문 추가</button>
-            <button onClick={()=>addItem("space")} style={addBtnS("#f0f9ff","#0ea5e9","#bae6fd")}>🏠 공간 추가</button>
-            <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}}
-              style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>
-              {zoneDrawMode?"✏️ 그리는 중... (Esc취소)":"🗂 구역 추가"}
-            </button>
-            <button onClick={()=>setModal("changePw")} style={{padding:"7px",width:"100%",backgroundColor:"#f8fafc",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:600}}>🔑 비밀번호 변경</button>
-          </div>
         </>}
 
+        {/* 스페이서 */}
+        <div style={{flex:1,minHeight:"12px"}}/>
+
+        {isAdmin&&<div style={{borderTop:"1px solid #f1f5f9",paddingTop:"10px"}}>
+          <div style={slS}>추가</div>
+          <button onClick={()=>addItem("seat")} style={addBtnS("#eff6ff","#2563eb","#bfdbfe")}>🪑 좌석 추가</button>
+          <button onClick={()=>addItem("wall")} style={addBtnS("#f8fafc","#475569","#e2e8f0")}>🧱 벽체 추가</button>
+          <button onClick={()=>addItem("door")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🚪 문 추가</button>
+          <button onClick={()=>addItem("space")} style={addBtnS("#f0f9ff","#0ea5e9","#bae6fd")}>🏠 공간 추가</button>
+          <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}}
+            style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>
+            {zoneDrawMode?"✏️ 그리는 중... (Esc취소)":"🗂 구역 추가"}
+          </button>
+          <button onClick={()=>setModal("changePw")} style={{padding:"7px",width:"100%",backgroundColor:"#f8fafc",color:"#64748b",border:"1px solid #e2e8f0",borderRadius:"7px",cursor:"pointer",fontSize:"11px",fontWeight:600,marginBottom:"6px"}}>🔑 비밀번호 변경</button>
+        </div>}
+
         <button onClick={()=>isAdmin?setIsAdmin(false):setModal("login")}
-          style={{marginTop:"auto",padding:"9px",backgroundColor:isAdmin?"#1e293b":"#2563eb",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700}}>
+          style={{padding:"9px",backgroundColor:isAdmin?"#1e293b":"#2563eb",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700}}>
           {isAdmin?"✅ 편집 종료":"🔐 관리자 로그인"}
         </button>
       </div>
@@ -639,10 +655,23 @@ export default function SeatMapSystem() {
                   <div onClick={()=>pickRef.current?.click()} style={{width:"22px",height:"22px",borderRadius:"50%",backgroundColor:"#fff",cursor:"pointer",border:"2px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"12px",color:"#94a3b8"}}>+</div>
                   <input ref={pickRef} type="color" style={{display:"none"}} onChange={e=>{const c=e.target.value;setCustomPalette(p=>[...p.filter(x=>x!==c),c]);updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,color:c}:i));}}/>
                 </div>
-                <div style={{display:"flex",gap:"6px",alignItems:"center",marginBottom:"8px"}}>
-                  <span style={{fontSize:"9px",color:"#94a3b8"}}>글자색</span>
-                  <div onClick={()=>updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,textColor:"#ffffff"}:i))} style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:"#1e293b",cursor:"pointer",border:selItems[0].textColor==="#ffffff"?"3px solid #2563eb":"2px solid transparent"}}/>
-                  <div onClick={()=>updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,textColor:"#1e293b"}:i))} style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:"#f1f5f9",cursor:"pointer",border:selItems[0].textColor==="#1e293b"?"3px solid #2563eb":"2px solid transparent",boxShadow:"inset 0 0 0 1px #cbd5e1"}}/>
+                <div style={{marginBottom:"8px"}}>
+                  <div style={{fontSize:"9px",color:"#94a3b8",marginBottom:"4px"}}>글자색</div>
+                  <div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}>
+                    {["#ffffff","#1e293b","#ef4444","#f59e0b","#10b981","#2563eb","#8b5cf6"].map(c=>(
+                      <div key={c} onClick={()=>updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,textColor:c}:i))}
+                        style={{width:"22px",height:"22px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:selItems[0].textColor===c?"3px solid #2563eb":"2px solid #e2e8f0",boxShadow:"0 1px 3px rgba(0,0,0,0.1)"}}/>
+                    ))}
+                  </div>
+                </div>
+                <div style={{marginBottom:"8px"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:"4px"}}>
+                    <span style={{fontSize:"9px",color:"#94a3b8"}}>투명도</span>
+                    <span style={{fontSize:"9px",color:"#64748b",fontWeight:700}}>{Math.round(colorToOpacity(selItems[0].color)*100)}%</span>
+                  </div>
+                  <input type="range" min="0.1" max="1" step="0.05" value={colorToOpacity(selItems[0].color)}
+                    onChange={e=>updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,color:applyOpacity(colorToHex(i.color),+e.target.value)}:i))}
+                    style={{width:"100%",accentColor:"#2563eb"}}/>
                 </div>
                 <div style={{display:"flex",gap:"4px"}}>
                   <button onClick={duplicateSelected} style={{flex:1,padding:"7px",border:"1px solid #d1fae5",borderRadius:"6px",fontSize:"11px",cursor:"pointer",backgroundColor:"#ecfdf5",color:"#10b981",fontWeight:700}}>⿻ 복제</button>
