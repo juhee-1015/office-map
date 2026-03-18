@@ -260,6 +260,7 @@ export default function SeatMapSystem() {
   const [allowOverlap, setAllowOverlap] = useState(false); // 겹침 허용 토글
   const [searchQuery, setSearchQuery] = useState(""); // 검색어
   const [searchResults, setSearchResults] = useState<{floorId:string;floorName:string;item:RoomItem}[]>([]);
+  const [searchHighlightId, setSearchHighlightId] = useState<number|null>(null); // 검색으로 찾은 좌석
 
   type ModalT = "login"|"changePw"|"saveVersion"|null;
   const [modal, setModal] = useState<ModalT>(null);
@@ -460,14 +461,16 @@ export default function SeatMapSystem() {
   const handleSearchResultClick = useCallback((floorId:string, itemId:number)=>{
     setActiveFloorId(floorId);
     setSelectedIds([itemId]);
+    setSearchHighlightId(itemId);
     setSearchQuery("");
     setSearchResults([]);
-    // 해당 좌석으로 카메라 이동
     const floor = floors.find(f=>f.id===floorId);
     const item = floor?.items.find(i=>i.id===itemId);
     if(item){
       setPan({x: -item.x*zoom+200, y: -item.y*zoom+200});
     }
+    // 3초 후 하이라이트 제거
+    setTimeout(()=>setSearchHighlightId(null), 3000);
   },[floors, zoom]);
   const selectAll=()=>setSelectedIds(curItems.map(i=>i.id));
   const selectByColor=(color:string)=>setSelectedIds(curItems.filter(i=>colorToHex(i.color)===color).map(i=>i.id));
@@ -869,17 +872,18 @@ export default function SeatMapSystem() {
         </div>
         <div ref={viewportRef}
           style={{flex:1,borderRadius:"14px",border:"1px solid #e2e8f0",overflow:"hidden",position:"relative",
-            backgroundColor:"#f1f5f9", userSelect:"none",
-            cursor: isPanning.current ? "grabbing" : zoneDrawMode ? "crosshair" : "grab"}}
+            userSelect:"none",
+            /* 배경 모눈종이 — 뷰포트에 고정 (움직이지 않음) */
+            backgroundColor:"#fafafa",
+            backgroundImage:"radial-gradient(#e2e8f0 1px, transparent 1px)",
+            backgroundSize:"20px 20px"}}
           onMouseDown={e=>{
-            // 빈 배경 패닝 (좌석/구역 아닌 곳)
             const target = e.target as HTMLElement;
             const isOnItem = target.closest("[data-item]");
             const isOnZone = target.closest("[data-zone]");
             if(!isOnItem && !isOnZone && !zoneDrawMode){
               isPanning.current = true;
               panStart.current = {x:e.clientX, y:e.clientY, px:pan.x, py:pan.y};
-              e.preventDefault();
             }
             handleCanvasMouseDown(e as unknown as React.MouseEvent<HTMLDivElement>);
           }}
@@ -898,16 +902,13 @@ export default function SeatMapSystem() {
             handleCanvasMouseUp(e as unknown as React.MouseEvent<HTMLDivElement>);
           }}>
 
-          {/* 실제 캔버스 — transform으로 줌/패닝 */}
+          {/* 실제 캔버스 — 배경 없이 transform만 적용 */}
           <div ref={canvasRef}
-            style={{position:"absolute",
+            style={{position:"absolute", top:0, left:0,
               transformOrigin:"0 0",
               transform:`translate(${pan.x}px,${pan.y}px) scale(${zoom})`,
               width:"2400px", height:"1600px",
-              backgroundColor:"#fafafa",
-              backgroundImage:"radial-gradient(#e2e8f0 1px, transparent 1px)",
-              backgroundSize:"20px 20px",
-              cursor: zoneDrawMode?"crosshair":"default"}}>
+              cursor: zoneDrawMode?"crosshair":isPanning.current?"grabbing":"default"}}>
 
           {/* 구역 (최하단 zIndex:1) — zoneVisible일 때만 표시 */}
           {zoneVisible&&curZones.map(zone=>(
@@ -974,10 +975,11 @@ export default function SeatMapSystem() {
           {curItems.map(item=>{
             const isSel=selectedIds.includes(item.id);
             const isOv=overlappingIds.has(item.id);
+            const isSearchHl=searchHighlightId===item.id;
             const isEmpty=item.type==="seat"&&(!item.name||item.name==="새 좌석"||item.name.trim()==="");
             const isEmptyHl=emptyHighlight&&isEmpty;
-            const bgColor=isOv?"#fee2e2":isEmptyHl?"#fef9c3":applyOpacity(item.color,colorToOpacity(item.color));
-            const borderColor=isSel?"#2563eb":isOv?"#ef4444":isEmptyHl?"#f59e0b":"rgba(0,0,0,0.08)";
+            const bgColor=isOv?"#fee2e2":isSearchHl?"#fbbf24":isEmptyHl?"#fef9c3":applyOpacity(item.color,colorToOpacity(item.color));
+            const borderColor=isSearchHl?"#f59e0b":isSel?"#2563eb":isOv?"#ef4444":isEmptyHl?"#f59e0b":"rgba(0,0,0,0.08)";
             return (
               <Draggable key={item.id} position={{x:item.x,y:item.y}}
                 onStart={(_e,_data)=>{
@@ -1016,9 +1018,9 @@ export default function SeatMapSystem() {
                         border:`${isSel||isOv||isEmptyHl?"2":"1"}px solid ${borderColor}`,
                         borderRadius:item.type==="wall"?"3px":"7px",
                         display:"flex",alignItems:"center",justifyContent:"center",
-                        color:isOv?"#ef4444":isEmptyHl?"#b45309":item.textColor,
+                        color:isOv?"#ef4444":isSearchHl?"#92400e":isEmptyHl?"#b45309":item.textColor,
                         fontSize:"11px",fontWeight:700,textAlign:"center",
-                        boxShadow:isSel?"0 0 0 3px rgba(37,99,235,0.2)":isOv?"0 0 0 3px rgba(239,68,68,0.2)":isEmptyHl?"0 0 0 2px rgba(245,158,11,0.3)":"0 1px 3px rgba(0,0,0,0.06)",
+                        boxShadow:isSearchHl?"0 0 0 4px #f59e0b, 0 0 20px rgba(245,158,11,0.6)":isSel?"0 0 0 3px rgba(37,99,235,0.2)":isOv?"0 0 0 3px rgba(239,68,68,0.2)":isEmptyHl?"0 0 0 2px rgba(245,158,11,0.3)":"0 1px 3px rgba(0,0,0,0.06)",
                         userSelect:"none",
                       }}>
                         {isEmptyHl&&!item.name?"빈자리":item.name}
