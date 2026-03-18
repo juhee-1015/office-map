@@ -85,6 +85,7 @@ export default function SeatMapSystem() {
   const [colorGroupNames,setColorGroupNames]=useState<Record<string,string>>({});
   const [colorGroupOrder,setColorGroupOrder]=useState<string[]>([]);
   const [customPalette,setCustomPalette]=useState<string[]>([]);
+  const [zonePalette,setZonePalette]=useState<string[]>([]);
   const [editingColorHex,setEditingColorHex]=useState<string|null>(null);
   const [modal,setModal]=useState<"login"|"changePw"|"saveVersion"|null>(null);
   const [mInput,setMInput]=useState("");
@@ -482,7 +483,7 @@ export default function SeatMapSystem() {
           <button onClick={()=>addItem("wall")} style={addBtnS("#f8fafc","#475569","#e2e8f0")}>🧱 벽체 추가</button>
           <button onClick={()=>addItem("door")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🚪 문 추가</button>
           <button onClick={()=>addItem("space")} style={addBtnS("#f0f9ff","#0ea5e9","#bae6fd")}>🏠 공간 추가</button>
-          <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}} style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>{zoneDrawMode?"✏️ 그리는 중...":"🗂 구역 추가"}</button>
+          <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}} style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>{zoneDrawMode?"그리는 중...":"▣ 구역 추가"}</button>
           <div style={{height:"8px"}}/>
           <button onClick={()=>setModal("changePw")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🔑 비밀번호 변경</button>
         </div>}
@@ -641,15 +642,17 @@ export default function SeatMapSystem() {
                 </div>
                 <div style={{marginTop:"8px"}}>
                   <div style={{fontSize:"9px",color:"#94a3b8",marginBottom:"4px"}}>색상</div>
-                  <div style={{display:"flex",gap:"5px",flexWrap:"wrap",alignItems:"center"}}>
-                    {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899"].map(c=>(
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,20px)",gap:"5px",alignItems:"center"}}>
+                    {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899","#f43f5e","#a16207","#0891b2","#7c3aed"].map(c=>(
                       <div key={c} onClick={()=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z))} style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:selZone.color===c?"3px solid #1e293b":"2px solid transparent"}}/>
                     ))}
-                    {/* 스포이드 색 추가 — customPalette에 저장 */}
+                    {zonePalette.map(c=>(
+                      <div key={c} onClick={()=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z))} style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:selZone.color===c?"3px solid #1e293b":"2px solid transparent"}}/>
+                    ))}
                     <label style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:"#fff",cursor:"pointer",border:"2px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",color:"#94a3b8"}}>
                       +<input type="color" style={{display:"none"}} value={selZone.color} onChange={e=>{
                         const c=e.target.value;
-                        setCustomPalette(p=>[...p.filter(x=>x!==c),c]);
+                        setZonePalette(p=>[...p.filter(x=>x!==c),c]);
                         updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z));
                       }}/>
                     </label>
@@ -679,8 +682,8 @@ export default function SeatMapSystem() {
                   <span style={{fontSize:"9px",color:"#94a3b8"}}>색상</span>
                   {customPalette.length>0&&<button onClick={()=>setEditingPalette(p=>!p)} style={{fontSize:"9px",color:editingPalette?"#ef4444":"#64748b",background:"none",border:"none",cursor:"pointer",padding:0}}>{editingPalette?"완료":"편집"}</button>}
                 </div>
-                <div style={{display:"flex",gap:"5px",flexWrap:"wrap",marginBottom:"8px"}}>
-                  {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899","#475569"].map(c=>(
+                <div style={{display:"grid",gridTemplateColumns:"repeat(6,22px)",gap:"5px",marginBottom:"8px",alignItems:"center"}}>
+                  {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899","#475569","#f43f5e","#a16207","#0891b2"].map(c=>(
                     <div key={c} onClick={()=>updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,color:c}:i))} style={{width:"22px",height:"22px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:colorToHex(selItems[0].color)===c?"3px solid #1e293b":"2px solid transparent"}}/>
                   ))}
                   {customPalette.map(c=>(
