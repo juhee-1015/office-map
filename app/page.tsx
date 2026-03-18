@@ -499,8 +499,6 @@ export default function SeatMapSystem() {
   };
 
   const handleCanvasMouseDown=(e:React.MouseEvent<HTMLDivElement>)=>{
-    // 좌석/벽/문/구역 요소를 직접 클릭한 경우는 각 요소 핸들러에서 처리
-    // 여기선 캔버스 배경(빈 곳) 클릭만 처리
     const target = e.target as HTMLElement;
     const isOnItem = target.closest("[data-item]");
     const isOnZone = target.closest("[data-zone]");
@@ -509,17 +507,16 @@ export default function SeatMapSystem() {
       return;
     }
     if(zoneDrawMode){
-      // 구역 그리기 시작 (어디서 클릭하든)
       const {x,y}=getCanvasPos(e);
       isZoneDrawing.current=true;
       setZoneDrawing({sx:x,sy:y,ex:x,ey:y});
-      e.preventDefault();
+      isPanning.current=false; // 구역 그리기 중엔 패닝 금지
       return;
     }
-    // 박스 셀렉션 - 빈 공간 클릭 시
     if(!isOnItem&&!isOnZone){
       const {x,y}=getCanvasPos(e);
       isBoxing.current=true;
+      isPanning.current=false; // 박스 셀렉션 시작하면 패닝 중단
       setBoxSel({sx:x,sy:y,ex:x,ey:y});
       setSelectedIds([]);
       setSelectedZoneId(null);
@@ -929,7 +926,6 @@ export default function SeatMapSystem() {
         <div ref={viewportRef}
           style={{flex:1,borderRadius:"14px",border:"1px solid #e2e8f0",overflow:"hidden",position:"relative",
             userSelect:"none",
-            /* 배경 모눈종이 — 뷰포트에 고정 (움직이지 않음) */
             backgroundColor:"#fafafa",
             backgroundImage:"radial-gradient(#e2e8f0 1px, transparent 1px)",
             backgroundSize:"20px 20px"}}
@@ -937,14 +933,19 @@ export default function SeatMapSystem() {
             const target = e.target as HTMLElement;
             const isOnItem = target.closest("[data-item]");
             const isOnZone = target.closest("[data-zone]");
-            if(!isOnItem && !isOnZone && !zoneDrawMode){
-              isPanning.current = true;
-              panStart.current = {x:e.clientX, y:e.clientY, px:pan.x, py:pan.y};
+            if(!isOnItem && !isOnZone){
+              if(zoneDrawMode){
+                // 구역 그리기는 canvasMouseDown에서 처리
+              } else {
+                // 빈 공간: 패닝 + 박스셀렉션 동시 시작
+                isPanning.current = true;
+                panStart.current = {x:e.clientX, y:e.clientY, px:pan.x, py:pan.y};
+              }
             }
             handleCanvasMouseDown(e as unknown as React.MouseEvent<HTMLDivElement>);
           }}
           onMouseMove={e=>{
-            if(isPanning.current){
+            if(isPanning.current && !isBoxing.current){
               setPan({x: panStart.current.px+(e.clientX-panStart.current.x), y: panStart.current.py+(e.clientY-panStart.current.y)});
             }
             handleCanvasMouseMove(e as unknown as React.MouseEvent<HTMLDivElement>);
@@ -1020,14 +1021,7 @@ export default function SeatMapSystem() {
           {snapGuides.x!==undefined&&<div style={{position:"absolute",left:snapGuides.x,top:0,bottom:0,width:"1px",backgroundColor:"#2563eb",opacity:0.5,zIndex:200,pointerEvents:"none"}}/>}
           {snapGuides.y!==undefined&&<div style={{position:"absolute",top:snapGuides.y,left:0,right:0,height:"1px",backgroundColor:"#2563eb",opacity:0.5,zIndex:200,pointerEvents:"none"}}/>}
 
-          {/* 박스 셀렉션 */}
-          {boxSel&&<div style={{position:"absolute",pointerEvents:"none",
-            left:Math.min(boxSel.sx,boxSel.ex),top:Math.min(boxSel.sy,boxSel.ey),
-            width:Math.abs(boxSel.ex-boxSel.sx),height:Math.abs(boxSel.ey-boxSel.sy),
-            border:"1.5px dashed #2563eb",backgroundColor:"rgba(37,99,235,0.05)",
-            zIndex:300,borderRadius:"3px"}}/>}
-
-          {/* ★ 좌석/벽/문 — data-item 속성 추가 */}
+          {/* ★ 좌석/벽/문 */}
           {curItems.map(item=>{
             const isSel=selectedIds.includes(item.id);
             const isOv=overlappingIds.has(item.id);
@@ -1089,6 +1083,15 @@ export default function SeatMapSystem() {
             );
           })}
           </div>{/* 내부 캔버스 끝 */}
+
+          {/* 박스 셀렉션 — 뷰포트 좌표계에서 표시 (캔버스 transform 역변환) */}
+          {boxSel&&<div style={{position:"absolute",pointerEvents:"none",
+            left: Math.min(boxSel.sx,boxSel.ex)*zoom+pan.x,
+            top: Math.min(boxSel.sy,boxSel.ey)*zoom+pan.y,
+            width: Math.abs(boxSel.ex-boxSel.sx)*zoom,
+            height: Math.abs(boxSel.ey-boxSel.sy)*zoom,
+            border:"1.5px dashed #2563eb",backgroundColor:"rgba(37,99,235,0.07)",
+            zIndex:9999,borderRadius:"3px"}}/>}
         </div>{/* 뷰포트 끝 */}
       </div>
 
