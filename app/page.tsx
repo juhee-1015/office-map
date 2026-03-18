@@ -659,7 +659,7 @@ export default function SeatMapSystem() {
                 </div>
                 <div style={{marginTop:"8px"}}>
                   <div style={{fontSize:"9px",color:"#94a3b8",marginBottom:"4px"}}>색상</div>
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,20px)",gap:"8px",alignItems:"center"}}>
+                  <div style={{display:"flex",gap:"8px",flexWrap:"wrap",alignItems:"center"}}>
                     {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899","#f43f5e","#a16207","#0891b2","#7c3aed"].map(c=>(
                       <div key={c} onClick={()=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z))} style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:selZone.color===c?"3px solid #1e293b":"2px solid transparent"}}/>
                     ))}
@@ -699,7 +699,7 @@ export default function SeatMapSystem() {
                   <span style={{fontSize:"9px",color:"#94a3b8"}}>색상</span>
                   {customPalette.length>0&&<button onClick={()=>setEditingPalette(p=>!p)} style={{fontSize:"9px",color:editingPalette?"#ef4444":"#64748b",background:"none",border:"none",cursor:"pointer",padding:0}}>{editingPalette?"완료":"편집"}</button>}
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(6,22px)",gap:"8px",marginBottom:"8px",alignItems:"center"}}>
+                <div style={{display:"flex",gap:"8px",flexWrap:"wrap",marginBottom:"8px",alignItems:"center"}}>
                   {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899","#475569","#f43f5e","#a16207","#0891b2"].map(c=>(
                     <div key={c} onClick={()=>updateItems(curItems.map(i=>selectedIds.includes(i.id)?{...i,color:c}:i))} style={{width:"22px",height:"22px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:colorToHex(selItems[0].color)===c?"3px solid #1e293b":"2px solid transparent"}}/>
                   ))}
