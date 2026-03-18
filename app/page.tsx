@@ -159,6 +159,7 @@ export default function SeatMapSystem() {
         if(data.activeFloorId)setActiveFloorId(data.activeFloorId);
         if(data.appTitle)setAppTitle(data.appTitle);
       }
+      if(data.versions)setVersions(data.versions);
       if(data.colorGroupNames)setColorGroupNames(data.colorGroupNames);
       if(data.colorGroupOrder)setColorGroupOrder(data.colorGroupOrder);
       if(data.customPalette)setCustomPalette(data.customPalette);
@@ -169,7 +170,7 @@ export default function SeatMapSystem() {
   const handleSaveToServer=useCallback(async()=>{
     setSaveStatus("saving");
     try{
-      const res=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette})});
+      const res=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette,versions})});
       if(!res.ok)throw new Error();
       setSaveStatus("saved");setTimeout(()=>setSaveStatus("idle"),2000);
     }catch{setSaveStatus("error");setTimeout(()=>setSaveStatus("idle"),2000);}
@@ -353,7 +354,7 @@ export default function SeatMapSystem() {
               <h3 style={{fontWeight:700,fontSize:"15px",marginBottom:"14px",color:"#1e293b"}}>버전 저장</h3>
               <input value={versionLabel} onChange={e=>setVersionLabel(e.target.value)} placeholder="버전 이름 (예: 3월 배치)" style={miS} autoFocus/>
               <div style={{display:"flex",gap:"8px",justifyContent:"center",marginTop:"14px"}}>
-                <button onClick={()=>{if(!versionLabel.trim())return;setVersions(p=>[...p,{id:Date.now().toString(),label:versionLabel.trim(),savedAt:new Date().toLocaleDateString("ko-KR"),floors:JSON.parse(JSON.stringify(floors))}]);setVersionLabel("");setModal(null);}} style={okBtnS}>저장</button>
+                <button onClick={()=>{if(!versionLabel.trim())return;const nv={id:Date.now().toString(),label:versionLabel.trim(),savedAt:new Date().toLocaleDateString("ko-KR"),floors:JSON.parse(JSON.stringify(floors))};setVersions(p=>{const updated=[...p,nv];fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette,versions:updated})});return updated;});setVersionLabel("");setModal(null);}} style={okBtnS}>저장</button>
                 <button onClick={()=>{setModal(null);setVersionLabel("");}} style={cxBtnS}>취소</button>
               </div>
             </>}
@@ -473,7 +474,7 @@ export default function SeatMapSystem() {
                   <div style={{fontSize:"10px",color:"#94a3b8",marginBottom:"6px"}}>{v.savedAt}</div>
                   <div style={{display:"flex",gap:"4px"}}>
                     <button onClick={()=>{saveHistory();setFloors(JSON.parse(JSON.stringify(v.floors)));}} style={{flex:1,padding:"4px",border:"1px solid #bfdbfe",borderRadius:"5px",fontSize:"10px",cursor:"pointer",backgroundColor:"#eff6ff",color:"#2563eb",fontWeight:600}}>복구</button>
-                    <button onClick={()=>setVersions(p=>p.filter(vv=>vv.id!==v.id))} style={{padding:"4px 8px",border:"1px solid #fecaca",borderRadius:"5px",fontSize:"10px",cursor:"pointer",backgroundColor:"#fef2f2",color:"#ef4444"}}>삭제</button>
+                    <button onClick={()=>setVersions(p=>{const updated=p.filter(vv=>vv.id!==v.id);fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette,versions:updated})});return updated;})} style={{padding:"4px 8px",border:"1px solid #fecaca",borderRadius:"5px",fontSize:"10px",cursor:"pointer",backgroundColor:"#fef2f2",color:"#ef4444"}}>삭제</button>
                   </div>
                 </div>
               ))}
