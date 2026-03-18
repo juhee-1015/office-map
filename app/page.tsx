@@ -470,6 +470,7 @@ export default function SeatMapSystem() {
     }
   },[floors, zoom]);
   const selectAll=()=>setSelectedIds(curItems.map(i=>i.id));
+  const selectByColor=(color:string)=>setSelectedIds(curItems.filter(i=>colorToHex(i.color)===color).map(i=>i.id));
 
   const saveVersion=(label:string)=>setVersions(p=>[{id:`v${Date.now()}`,label,savedAt:new Date().toLocaleString("ko-KR"),floors:JSON.parse(JSON.stringify(floors))},...p]);
   const restoreVersion=(v:VersionSnapshot)=>{saveHistory();setFloors(JSON.parse(JSON.stringify(v.floors)));if(!v.floors.find(f=>f.id===activeFloorId))setActiveFloorId(v.floors[0].id);};
