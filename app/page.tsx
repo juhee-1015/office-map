@@ -465,18 +465,12 @@ export default function SeatMapSystem() {
   // 검색 결과 클릭 → 해당 층으로 이동 + 좌석 선택
   const handleSearchResultClick = useCallback((floorId:string, itemId:number)=>{
     setActiveFloorId(floorId);
-    setSelectedIds([itemId]);
     setSearchHighlightId(itemId);
     setSearchQuery("");
     setSearchResults([]);
-    const floor = floors.find(f=>f.id===floorId);
-    const item = floor?.items.find(i=>i.id===itemId);
-    if(item){
-      setPan({x: -item.x*zoom+200, y: -item.y*zoom+200});
-    }
-    // 3초 후 하이라이트 제거
+    // 화면 이동 없이 해당 좌석만 하이라이트
     setTimeout(()=>setSearchHighlightId(null), 3000);
-  },[floors, zoom]);
+  },[]);
   const selectAll=()=>setSelectedIds(curItems.map(i=>i.id));
   const selectByColor=(color:string)=>setSelectedIds(curItems.filter(i=>colorToHex(i.color)===color).map(i=>i.id));
 
@@ -566,35 +560,71 @@ export default function SeatMapSystem() {
     isBoxing.current=false;
   };
 
-  // 키보드 단축키 — 매 렌더마다 최신 클로저로 재등록
+  // 키보드 단축키
   useEffect(()=>{
-    if(!hasMounted) return;
     const h=(e:KeyboardEvent)=>{
       if(!isAdmin) return;
       const tag=(document.activeElement as HTMLElement)?.tagName;
       const inInput=tag==="INPUT"||tag==="TEXTAREA";
       const ctrl=e.ctrlKey||e.metaKey;
-      // Ctrl+Z
-      if(ctrl&&e.key==="z"){e.preventDefault();if(undoHistory.length){setFloors(undoHistory[undoHistory.length-1]);setUndoHistory(p=>p.slice(0,-1));}return;}
-      // Ctrl+D 복제
-      if(ctrl&&e.key==="d"){if(inInput)return;e.preventDefault();if(!selectedIds.length)return;const snap=JSON.parse(JSON.stringify(curItems));setUndoHistory(p=>[...p.slice(-29),snap]);const nids:number[]=[];const dd=curItems.filter(i=>selectedIds.includes(i.id)).map(i=>{const nid=Date.now()+Math.floor(Math.random()*99999);nids.push(nid);return{...i,id:nid,x:i.x+20,y:i.y+20};});setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:[...f.items,...dd]}:f));setSelectedIds(nids);return;}
-      // Ctrl+A
-      if(ctrl&&e.key==="a"){if(inInput)return;e.preventDefault();setSelectedIds(curItems.map(i=>i.id));return;}
-      // Escape
-      if(e.key==="Escape"){setZoneDrawMode(false);isZoneDrawing.current=false;setZoneDrawing(null);return;}
-      // Delete
-      if((e.key==="Delete"||e.key==="Backspace")&&!inInput){
-        const snap=JSON.parse(JSON.stringify(curItems));
-        if(selectedZoneId!==null){setUndoHistory(p=>[...p.slice(-29),snap]);setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,zones:curZones.filter(z=>z.id!==selectedZoneId)}:f));setSelectedZoneId(null);}
-        else if(selectedIds.length){setUndoHistory(p=>[...p.slice(-29),snap]);setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:curItems.filter(i=>!selectedIds.includes(i.id))}:f));setSelectedIds([]);}
+      if(ctrl&&e.key==="z"){
+        e.preventDefault();
+        if(undoHistory.length===0) return;
+        setFloors(undoHistory[undoHistory.length-1]);
+        setUndoHistory(p=>p.slice(0,-1));
         return;
       }
-      // 화살표
-      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&selectedIds.length&&!inInput){e.preventDefault();const s=e.shiftKey?10:1;const dx=e.key==="ArrowLeft"?-s:e.key==="ArrowRight"?s:0;const dy=e.key==="ArrowUp"?-s:e.key==="ArrowDown"?s:0;setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:f.items.map(i=>selectedIds.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i)}:f));return;}
+      if(ctrl&&e.key==="d"){
+        if(inInput) return;
+        e.preventDefault();
+        if(!selectedIds.length) return;
+        const snap=JSON.parse(JSON.stringify(curItems));
+        setUndoHistory(p=>[...p.slice(-29),snap]);
+        const nids:number[]=[];
+        const dd=curItems.filter(i=>selectedIds.includes(i.id)).map(i=>{
+          const nid=Date.now()+Math.floor(Math.random()*99999);
+          nids.push(nid);
+          return{...i,id:nid,x:i.x+20,y:i.y+20};
+        });
+        setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:[...f.items,...dd]}:f));
+        setSelectedIds(nids);
+        return;
+      }
+      if(ctrl&&e.key==="a"){
+        if(inInput) return;
+        e.preventDefault();
+        setSelectedIds(curItems.map(i=>i.id));
+        return;
+      }
+      if(e.key==="Escape"){
+        setZoneDrawMode(false);isZoneDrawing.current=false;setZoneDrawing(null);
+        return;
+      }
+      if((e.key==="Delete"||e.key==="Backspace")&&!inInput){
+        const snap=JSON.parse(JSON.stringify(curItems));
+        if(selectedZoneId!==null){
+          setUndoHistory(p=>[...p.slice(-29),snap]);
+          setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,zones:curZones.filter(z=>z.id!==selectedZoneId)}:f));
+          setSelectedZoneId(null);
+        } else if(selectedIds.length){
+          setUndoHistory(p=>[...p.slice(-29),snap]);
+          setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:curItems.filter(i=>!selectedIds.includes(i.id))}:f));
+          setSelectedIds([]);
+        }
+        return;
+      }
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&selectedIds.length&&!inInput){
+        e.preventDefault();
+        const s=e.shiftKey?10:1;
+        const dx=e.key==="ArrowLeft"?-s:e.key==="ArrowRight"?s:0;
+        const dy=e.key==="ArrowUp"?-s:e.key==="ArrowDown"?s:0;
+        setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:f.items.map(i=>selectedIds.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i)}:f));
+        return;
+      }
     };
     window.addEventListener("keydown",h,true);
     return()=>window.removeEventListener("keydown",h,true);
-  },[hasMounted,isAdmin,undoHistory,selectedIds,selectedZoneId,curItems,curZones,activeFloorId]);
+  },[isAdmin,undoHistory,selectedIds,selectedZoneId,curItems,curZones,activeFloorId]);
 
   if(!hasMounted)return null;
   const selZone=curZones.find(z=>z.id===selectedZoneId);
