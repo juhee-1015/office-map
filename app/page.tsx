@@ -565,64 +565,33 @@ export default function SeatMapSystem() {
     isBoxing.current=false;
   };
 
-  // ── 최신 상태 ref (클로저 stale 방지) ─────────────────────
-  const rIsAdmin = useRef(isAdmin);
-  const rSelectedIds = useRef(selectedIds);
-  const rSelectedZoneId = useRef(selectedZoneId);
-  const rCurItems = useRef(curItems);
-  const rCurZones = useRef(curZones);
-  const rUndoHistory = useRef(undoHistory);
-  const rActiveFloorId = useRef(activeFloorId);
-  useEffect(()=>{rIsAdmin.current=isAdmin;},[isAdmin]);
-  useEffect(()=>{rSelectedIds.current=selectedIds;},[selectedIds]);
-  useEffect(()=>{rSelectedZoneId.current=selectedZoneId;},[selectedZoneId]);
-  useEffect(()=>{rCurItems.current=curItems;},[curItems]);
-  useEffect(()=>{rCurZones.current=curZones;},[curZones]);
-  useEffect(()=>{rUndoHistory.current=undoHistory;},[undoHistory]);
-  useEffect(()=>{rActiveFloorId.current=activeFloorId;},[activeFloorId]);
-
-  // 키보드 — 마운트 1회만 등록, capture phase로 최우선 처리
+  // 키보드 단축키
   useEffect(()=>{
+    if(!hasMounted||!isAdmin) return;
     const h=(e:KeyboardEvent)=>{
-      if(!rIsAdmin.current) return;
       const tag=(document.activeElement as HTMLElement)?.tagName;
       const inInput=tag==="INPUT"||tag==="TEXTAREA";
-      const ids=rSelectedIds.current;
-      const zoneId=rSelectedZoneId.current;
-      const items=rCurItems.current;
-      const zones=rCurZones.current;
-      const floorId=rActiveFloorId.current;
-
       // Ctrl+Z 되돌리기
       if((e.ctrlKey||e.metaKey)&&e.key==="z"&&!e.shiftKey){
         e.preventDefault();
-        const hist=rUndoHistory.current;
-        if(hist.length===0) return;
-        setFloors(hist[hist.length-1]);
-        setUndoHistory(hist.slice(0,-1));
+        if(undoHistory.length===0) return;
+        setFloors(undoHistory[undoHistory.length-1]);
+        setUndoHistory(p=>p.slice(0,-1));
         return;
       }
-      // Ctrl+C 복사
-      if((e.ctrlKey||e.metaKey)&&e.key==="c"){
+      // Ctrl+D 복제
+      if((e.ctrlKey||e.metaKey)&&e.key==="d"){
         if(inInput) return;
         e.preventDefault();
-        const copied=items.filter(i=>ids.includes(i.id));
-        if(copied.length>0) clipboard.current=JSON.parse(JSON.stringify(copied));
-        return;
-      }
-      // Ctrl+V 붙여넣기
-      if((e.ctrlKey||e.metaKey)&&e.key==="v"){
-        if(inInput) return;
-        e.preventDefault();
-        if(!clipboard.current.length) return;
-        setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(items))]);
+        if(!selectedIds.length) return;
+        setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(curItems))]);
         const newIds:number[]=[];
-        const pasted=clipboard.current.map(item=>{
+        const duped=curItems.filter(i=>selectedIds.includes(i.id)).map(i=>{
           const nid=Date.now()+Math.floor(Math.random()*99999);
           newIds.push(nid);
-          return{...item,id:nid,x:item.x+20,y:item.y+20};
+          return{...i,id:nid,x:i.x+20,y:i.y+20};
         });
-        setFloors(p=>p.map(f=>f.id===floorId?{...f,items:[...f.items,...pasted]}:f));
+        setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:[...f.items,...duped]}:f));
         setSelectedIds(newIds);
         return;
       }
@@ -630,7 +599,7 @@ export default function SeatMapSystem() {
       if((e.ctrlKey||e.metaKey)&&e.key==="a"){
         if(inInput) return;
         e.preventDefault();
-        setSelectedIds(items.map(i=>i.id));
+        setSelectedIds(curItems.map(i=>i.id));
         return;
       }
       // Escape
@@ -640,31 +609,30 @@ export default function SeatMapSystem() {
       }
       // Delete/Backspace
       if((e.key==="Delete"||e.key==="Backspace")&&!inInput){
-        if(zoneId!==null){
-          setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(zones))]);
-          setFloors(p=>p.map(f=>f.id===floorId?{...f,zones:zones.filter(z=>z.id!==zoneId)}:f));
+        if(selectedZoneId!==null){
+          setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(curItems))]);
+          setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,zones:curZones.filter(z=>z.id!==selectedZoneId)}:f));
           setSelectedZoneId(null);
-        } else if(ids.length){
-          setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(items))]);
-          setFloors(p=>p.map(f=>f.id===floorId?{...f,items:items.filter(i=>!ids.includes(i.id))}:f));
+        } else if(selectedIds.length){
+          setUndoHistory(p=>[...p.slice(-29),JSON.parse(JSON.stringify(curItems))]);
+          setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:curItems.filter(i=>!selectedIds.includes(i.id))}:f));
           setSelectedIds([]);
         }
         return;
       }
       // 화살표 이동
-      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&ids.length&&!inInput){
+      if(["ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.key)&&selectedIds.length&&!inInput){
         e.preventDefault();
         const step=e.shiftKey?10:1;
         const dx=e.key==="ArrowLeft"?-step:e.key==="ArrowRight"?step:0;
         const dy=e.key==="ArrowUp"?-step:e.key==="ArrowDown"?step:0;
-        setFloors(p=>p.map(f=>f.id===floorId?{...f,items:f.items.map(i=>ids.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i)}:f));
+        setFloors(p=>p.map(f=>f.id===activeFloorId?{...f,items:f.items.map(i=>selectedIds.includes(i.id)?{...i,x:i.x+dx,y:i.y+dy}:i)}:f));
         return;
       }
     };
     window.addEventListener("keydown",h,true);
     return()=>window.removeEventListener("keydown",h,true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[hasMounted]); // hasMounted 후에 등록
+  },[hasMounted,isAdmin,undoHistory,selectedIds,selectedZoneId,curItems,curZones,activeFloorId]);
 
   if(!hasMounted)return null;
   const selZone=curZones.find(z=>z.id===selectedZoneId);
@@ -878,7 +846,7 @@ export default function SeatMapSystem() {
 
         {isAdmin&&sideTab==="shortcuts"&&<>
           <span style={slS}>⌨️ 단축키</span>
-          {[["Ctrl+Z","되돌리기"],["Ctrl+C","복사"],["Ctrl+V","붙여넣기"],["Ctrl+A","전체선택"],["Del","삭제"],["Esc","구역그리기 취소"],["←↑→↓","미세이동 1px"],["Shift+화살표","10px 이동"],["드래그(빈공간)","박스 다중선택"],["Shift+클릭","개별 추가선택"]].map(([k,d])=>(
+          {[["Ctrl+Z","되돌리기"],["Ctrl+D","복제"],["Ctrl+A","전체선택"],["Del","삭제"],["Esc","구역그리기 취소"],["←↑→↓","미세이동 1px"],["Shift+화살표","10px 이동"],["드래그(빈공간)","박스 다중선택"],["Shift+클릭","개별 추가선택"]].map(([k,d])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"5px"}}>
               <code style={{fontSize:"9px",backgroundColor:"#e2e8f0",padding:"2px 5px",borderRadius:"3px",color:"#475569"}}>{k}</code>
               <span style={{fontSize:"10px",color:"#94a3b8"}}>{d}</span>
@@ -1279,7 +1247,7 @@ export default function SeatMapSystem() {
               <div style={pcS}>
                 <div style={slS}>🛠 편집</div>
                 <button onClick={duplicateSelected}
-                  style={{width:"100%",padding:"8px",border:"1px solid #d1fae5",borderRadius:"6px",fontSize:"12px",cursor:"pointer",backgroundColor:"#ecfdf5",color:"#10b981",fontWeight:700,marginBottom:"5px"}}>⿻ 복제 (Ctrl+C → Ctrl+V)</button>
+                  style={{width:"100%",padding:"8px",border:"1px solid #d1fae5",borderRadius:"6px",fontSize:"12px",cursor:"pointer",backgroundColor:"#ecfdf5",color:"#10b981",fontWeight:700,marginBottom:"5px"}}>⿻ 복제 (Ctrl+D)</button>
                 <button onClick={()=>{saveHistory();updateItems(curItems.filter(i=>!selectedIds.includes(i.id)));setSelectedIds([]);}}
                   style={{width:"100%",padding:"8px",border:"1px solid #fecaca",borderRadius:"6px",fontSize:"12px",cursor:"pointer",backgroundColor:"#fef2f2",color:"#ef4444",fontWeight:700}}>🗑 삭제 (Del)</button>
               </div>
