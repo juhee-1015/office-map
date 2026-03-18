@@ -481,11 +481,8 @@ export default function SeatMapSystem() {
           <button onClick={()=>addItem("wall")} style={addBtnS("#f8fafc","#475569","#e2e8f0")}>🧱 벽체 추가</button>
           <button onClick={()=>addItem("door")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🚪 문 추가</button>
           <button onClick={()=>addItem("space")} style={addBtnS("#f0f9ff","#0ea5e9","#bae6fd")}>🏠 공간 추가</button>
-          <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}}
-            style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>
-            {zoneDrawMode?"✏️ 그리는 중... (Esc취소)":"🗂 구역 추가"}
-          </button>
-
+          <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}} style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>{zoneDrawMode?"✏️ 그리는 중...":"🗂 구역 추가"}</button>
+          <button onClick={()=>setModal("changePw")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🔑 비밀번호 변경</button>
         </div>}
 
         <button onClick={()=>isAdmin?setIsAdmin(false):setModal("login")}
@@ -760,16 +757,7 @@ export default function SeatMapSystem() {
                 <div style={{fontSize:"24px",marginBottom:"8px"}}>👆</div>
                 <div style={{fontSize:"11px"}}>좌석을 클릭하거나<br/>드래그로 다중 선택</div>
               </div>
-              {/* 비밀번호 변경 */}
-              <div style={{...pcS,marginTop:"8px"}}>
-                <div style={slS}>🔑 비밀번호 변경</div>
-                <input type="password" placeholder="현재 비밀번호" value={pwCurrent} onChange={e=>setPwCurrent(e.target.value)} style={{...inS,marginBottom:"6px"}}/>
-                <input type="password" placeholder="새 비밀번호" value={pwNew} onChange={e=>setPwNew(e.target.value)} style={{...inS,marginBottom:"6px"}}
-                  onKeyDown={e=>{if(e.key==="Enter"){if(pwCurrent!==adminPassword){setPwErr("현재 비밀번호 오류");}else if(pwNew.length<4){setPwErr("4자 이상 입력");}else{setAdminPassword(pwNew);setPwCurrent("");setPwNew("");setPwErr("✅ 변경 완료!");}  }}}/>
-                {pwErr&&<p style={{fontSize:"11px",color:pwErr.startsWith("✅")?"#059669":"#ef4444",margin:"0 0 6px"}}>{pwErr}</p>}
-                <button onClick={()=>{if(pwCurrent!==adminPassword){setPwErr("현재 비밀번호 오류");}else if(pwNew.length<4){setPwErr("4자 이상 입력");}else{setAdminPassword(pwNew);setPwCurrent("");setPwNew("");setPwErr("✅ 변경 완료!");}}}
-                  style={{width:"100%",padding:"7px",backgroundColor:"#1e293b",color:"#fff",border:"none",borderRadius:"7px",cursor:"pointer",fontSize:"12px",fontWeight:700}}>변경</button>
-              </div>
+
             </div>
           )}
         </div>
