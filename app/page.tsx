@@ -645,9 +645,13 @@ export default function SeatMapSystem() {
                     {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899"].map(c=>(
                       <div key={c} onClick={()=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z))} style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:selZone.color===c?"3px solid #1e293b":"2px solid transparent"}}/>
                     ))}
-                    {/* 스포이드 색 추가 */}
+                    {/* 스포이드 색 추가 — customPalette에 저장 */}
                     <label style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:"#fff",cursor:"pointer",border:"2px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",color:"#94a3b8"}}>
-                      +<input type="color" style={{display:"none"}} value={selZone.color} onChange={e=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:e.target.value}:z))}/>
+                      +<input type="color" style={{display:"none"}} value={selZone.color} onChange={e=>{
+                        const c=e.target.value;
+                        setCustomPalette(p=>[...p.filter(x=>x!==c),c]);
+                        updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z));
+                      }}/>
                     </label>
                   </div>
                 </div>
