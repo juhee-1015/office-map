@@ -282,20 +282,23 @@ export default function SeatMapSystem() {
   const isPanning = useRef(false);
   const panStart = useRef({x:0, y:0, px:0, py:0});
 
-  const handleWheel = useCallback((e: WheelEvent)=>{
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? 0.9 : 1.1;
-    setZoom(z => Math.min(2, Math.max(0.2, z * delta)));
-  }, []);
-
+  // zoom/pan 상태
   const viewportRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLDivElement>(null);
+
+  // 휠 줌 — hasMounted 후 document에 등록
   useEffect(()=>{
-    const el = viewportRef.current;
-    if(!el) return;
-    el.addEventListener('wheel', handleWheel, {passive: false});
-    return () => el.removeEventListener('wheel', handleWheel);
-  }, [handleWheel]);
+    if(!hasMounted) return;
+    const onWheel=(e:WheelEvent)=>{
+      if(!viewportRef.current) return;
+      if(!viewportRef.current.contains(e.target as Node)) return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.9 : 1.1;
+      setZoom(z => Math.min(2, Math.max(0.2, z * delta)));
+    };
+    document.addEventListener('wheel', onWheel, {passive: false});
+    return () => document.removeEventListener('wheel', onWheel);
+  }, [hasMounted]);
 
   type SideTab = "floors"|"versions"|"shortcuts";
   const [sideTab, setSideTab] = useState<SideTab>("floors");
@@ -661,7 +664,7 @@ export default function SeatMapSystem() {
     window.addEventListener("keydown",h,true);
     return()=>window.removeEventListener("keydown",h,true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[]);
+  },[hasMounted]); // hasMounted 후에 등록
 
   if(!hasMounted)return null;
   const selZone=curZones.find(z=>z.id===selectedZoneId);
