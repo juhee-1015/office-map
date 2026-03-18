@@ -38,17 +38,18 @@ function emptyFloor(id:string,name:string):FloorInfo{return{id,displayName:name,
 function exportToPNG(el:HTMLElement,title:string,floorName:string){const w=window.open("","_blank");if(!w)return;w.document.write(`<html><head><title>${title}_${floorName}</title><style>body{margin:0;padding:16px;background:#fafafa;}*{font-family:'Apple SD Gothic Neo',sans-serif;box-sizing:border-box;}</style></head><body>${el.outerHTML}</body></html>`);w.document.close();setTimeout(()=>{w.print();},600);}
 
 function DoorShape({w,h,color,rotation,name,isSelected}:{w:number;h:number;color:string;rotation:number;name:string;isSelected:boolean}){
-  const arc=Math.min(w,h);
   return(
-    <div style={{width:w,height:h,transform:`rotate(${rotation}deg)`,position:"relative"}}>
-      <svg width={w} height={h} style={{position:"absolute",top:0,left:0,overflow:"visible"}}>
-        <path d={`M 0 ${arc} A ${arc} ${arc} 0 0 1 ${arc} 0`}
-          fill={hexToRgba(color,0.15)} stroke={color} strokeWidth="1.5" strokeDasharray="5,3"/>
-        <line x1="0" y1="0" x2="0" y2={arc} stroke={color} strokeWidth="4" strokeLinecap="round"/>
-        <circle cx="0" cy="0" r="3" fill={color}/>
-        {isSelected&&<rect x="-3" y="-3" width={w+6} height={h+6} fill="none" stroke="#2563eb" strokeWidth="2" strokeDasharray="5,3" rx="4"/>}
-      </svg>
-      {name&&<div style={{position:"absolute",top:"50%",left:0,right:0,transform:"translateY(-50%)",textAlign:"center",fontSize:"10px",fontWeight:800,color:color,pointerEvents:"none",textShadow:"0 0 4px #fff,0 0 4px #fff"}}>{name}</div>}
+    <div style={{
+      width:w, height:h,
+      transform:`rotate(${rotation}deg)`,
+      backgroundColor:hexToRgba(color,0.08),
+      border:`2px dashed ${isSelected?"#2563eb":color}`,
+      borderRadius:"4px",
+      display:"flex", alignItems:"center", justifyContent:"center",
+      boxShadow:isSelected?"0 0 0 2px rgba(37,99,235,0.2)":"none",
+      boxSizing:"border-box",
+    }}>
+      {name&&<span style={{fontSize:"10px",fontWeight:700,color:color,userSelect:"none",textAlign:"center",lineHeight:1.2}}>{name}</span>}
     </div>
   );
 }
@@ -59,7 +60,7 @@ const INITIAL_DATA = {"floors":[{"id":"F5","displayName":"5층 (아트실)","ite
 const miS:React.CSSProperties={width:"100%",padding:"10px 14px",border:"1.5px solid #e2e8f0",borderRadius:"8px",fontSize:"14px",outline:"none",boxSizing:"border-box"};
 const okBtnS:React.CSSProperties={padding:"10px 24px",backgroundColor:"#2563eb",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:700};
 const cxBtnS:React.CSSProperties={padding:"10px 24px",border:"1px solid #e2e8f0",borderRadius:"8px",cursor:"pointer",fontSize:"13px",color:"#64748b",backgroundColor:"#f8fafc"};
-const addBtnS=(bg:string,color:string,border:string):React.CSSProperties=>({width:"100%",padding:"8px 12px",backgroundColor:bg,color,border:`1px solid ${border}`,borderRadius:"8px",fontWeight:700,cursor:"pointer",fontSize:"12px",marginBottom:"4px",textAlign:"left"});
+const addBtnS=(bg:string,color:string,border:string):React.CSSProperties=>({width:"100%",padding:"8px 10px",backgroundColor:bg,color,border:`1px solid ${border}`,borderRadius:"8px",fontWeight:700,cursor:"pointer",fontSize:"12px",marginBottom:"4px",textAlign:"left",display:"flex",alignItems:"center",gap:"7px"});
 const pcS:React.CSSProperties={padding:"11px",border:"1px solid #f1f5f9",borderRadius:"10px",marginBottom:"8px",backgroundColor:"#fafafa"};
 const slS:React.CSSProperties={fontSize:"10px",color:"#94a3b8",display:"block",marginBottom:"7px",fontWeight:700,textTransform:"uppercase" as const,letterSpacing:"0.5px"};
 const inS:React.CSSProperties={width:"100%",padding:"6px 8px",border:"1px solid #e2e8f0",borderRadius:"6px",fontSize:"12px",boxSizing:"border-box" as const,outline:"none",backgroundColor:"#fff"};
@@ -482,6 +483,7 @@ export default function SeatMapSystem() {
           <button onClick={()=>addItem("door")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🚪 문 추가</button>
           <button onClick={()=>addItem("space")} style={addBtnS("#f0f9ff","#0ea5e9","#bae6fd")}>🏠 공간 추가</button>
           <button onClick={()=>{setZoneDrawMode(p=>!p);setSelectedIds([]);setSelectedZoneId(null);isZoneDrawing.current=false;setZoneDrawing(null);}} style={addBtnS(zoneDrawMode?"#fef9c3":"#fafafa",zoneDrawMode?"#b45309":"#64748b",zoneDrawMode?"#fde68a":"#e2e8f0")}>{zoneDrawMode?"✏️ 그리는 중...":"🗂 구역 추가"}</button>
+          <div style={{height:"8px"}}/>
           <button onClick={()=>setModal("changePw")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🔑 비밀번호 변경</button>
         </div>}
 
@@ -639,10 +641,14 @@ export default function SeatMapSystem() {
                 </div>
                 <div style={{marginTop:"8px"}}>
                   <div style={{fontSize:"9px",color:"#94a3b8",marginBottom:"4px"}}>색상</div>
-                  <div style={{display:"flex",gap:"6px",flexWrap:"wrap"}}>
+                  <div style={{display:"flex",gap:"5px",flexWrap:"wrap",alignItems:"center"}}>
                     {["#3b82f6","#10b981","#8b5cf6","#f59e0b","#ef4444","#06b6d4","#64748b","#ec4899"].map(c=>(
                       <div key={c} onClick={()=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:c}:z))} style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:c,cursor:"pointer",border:selZone.color===c?"3px solid #1e293b":"2px solid transparent"}}/>
                     ))}
+                    {/* 스포이드 색 추가 */}
+                    <label style={{width:"20px",height:"20px",borderRadius:"50%",backgroundColor:"#fff",cursor:"pointer",border:"2px dashed #cbd5e1",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"11px",color:"#94a3b8"}}>
+                      +<input type="color" style={{display:"none"}} value={selZone.color} onChange={e=>updateZones(curZones.map(z=>z.id===selZone.id?{...z,color:e.target.value}:z))}/>
+                    </label>
                   </div>
                 </div>
                 <button onClick={()=>{saveHistory();updateZones(curZones.filter(z=>z.id!==selZone.id));setSelectedZoneId(null);}} style={{width:"100%",marginTop:"10px",padding:"7px",border:"1px solid #fecaca",borderRadius:"6px",fontSize:"11px",cursor:"pointer",backgroundColor:"#fef2f2",color:"#ef4444",fontWeight:700}}>🗑 구역 삭제</button>
