@@ -142,6 +142,23 @@ export default function SeatMapSystem() {
   useEffect(()=>{
     fetch("/api/load").then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
       if(!data)return;
+      // 좌석 배치 (이름/위치만 덮어쓰기, 구조는 INITIAL_DATA 기준 유지)
+      if(data.floors&&Array.isArray(data.floors)&&data.floors.length>0){
+        setFloors(prev=>prev.map(floor=>{
+          const saved=data.floors.find((f:any)=>f.id===floor.id);
+          if(!saved)return floor;
+          // 저장된 아이템으로 교체 (없는 id는 초기값 유지)
+          const mergedItems=floor.items.map((item:any)=>{
+            const s=saved.items?.find((si:any)=>si.id===item.id);
+            return s?{...item,...s}:item;
+          });
+          // 저장에만 있는 신규 아이템 추가
+          const newItems=saved.items?.filter((si:any)=>!floor.items.find((i:any)=>i.id===si.id))||[];
+          return{...floor,items:[...mergedItems,...newItems],zones:saved.zones||floor.zones};
+        }));
+        if(data.activeFloorId)setActiveFloorId(data.activeFloorId);
+        if(data.appTitle)setAppTitle(data.appTitle);
+      }
       if(data.colorGroupNames)setColorGroupNames(data.colorGroupNames);
       if(data.colorGroupOrder)setColorGroupOrder(data.colorGroupOrder);
       if(data.customPalette)setCustomPalette(data.customPalette);
