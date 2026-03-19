@@ -87,7 +87,7 @@ export default function SeatMapSystem() {
   const [customPalette,setCustomPalette]=useState<string[]>([]);
   const [zonePalette,setZonePalette]=useState<string[]>([]);
   const [editingColorHex,setEditingColorHex]=useState<string|null>(null);
-  const [modal,setModal]=useState<"login"|"changePw"|"saveVersion"|null>(null);
+  const [modal,setModal]=useState<"login"|"changePw"|"saveVersion"|"confirmExit"|null>(null);
   const [mInput,setMInput]=useState("");
   const [mInput2,setMInput2]=useState("");
   const [pwCurrent,setPwCurrent]=useState("");
@@ -142,20 +142,9 @@ export default function SeatMapSystem() {
   useEffect(()=>{
     fetch("/api/load").then(r=>{if(!r.ok)throw new Error();return r.json();}).then(data=>{
       if(!data)return;
-      // 좌석 배치 (이름/위치만 덮어쓰기, 구조는 INITIAL_DATA 기준 유지)
+      // 저장된 floors 통째로 복원
       if(data.floors&&Array.isArray(data.floors)&&data.floors.length>0){
-        setFloors(prev=>prev.map(floor=>{
-          const saved=data.floors.find((f:any)=>f.id===floor.id);
-          if(!saved)return floor;
-          // 저장된 아이템으로 교체 (없는 id는 초기값 유지)
-          const mergedItems=floor.items.map((item:any)=>{
-            const s=saved.items?.find((si:any)=>si.id===item.id);
-            return s?{...item,...s}:item;
-          });
-          // 저장에만 있는 신규 아이템 추가
-          const newItems=saved.items?.filter((si:any)=>!floor.items.find((i:any)=>i.id===si.id))||[];
-          return{...floor,items:[...mergedItems,...newItems],zones:saved.zones||floor.zones};
-        }));
+        setFloors(data.floors);
         if(data.activeFloorId)setActiveFloorId(data.activeFloorId);
         if(data.appTitle)setAppTitle(data.appTitle);
       }
@@ -163,14 +152,15 @@ export default function SeatMapSystem() {
       if(data.colorGroupNames)setColorGroupNames(data.colorGroupNames);
       if(data.colorGroupOrder)setColorGroupOrder(data.colorGroupOrder);
       if(data.customPalette)setCustomPalette(data.customPalette);
+      if(data.zonePalette)setZonePalette(data.zonePalette);
     }).catch(()=>{});
   },[]);
 
-  // 저장
+  // 저장 (수동)
   const handleSaveToServer=useCallback(async()=>{
     setSaveStatus("saving");
     try{
-      const res=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette,versions})});
+      const res=await fetch("/api/save",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({floors,activeFloorId,appTitle,colorGroupNames,colorGroupOrder,customPalette,zonePalette,versions})});
       if(!res.ok)throw new Error();
       setSaveStatus("saved");setTimeout(()=>setSaveStatus("idle"),2000);
     }catch{setSaveStatus("error");setTimeout(()=>setSaveStatus("idle"),2000);}
@@ -358,6 +348,23 @@ export default function SeatMapSystem() {
                 <button onClick={()=>{setModal(null);setVersionLabel("");}} style={cxBtnS}>취소</button>
               </div>
             </>}
+            {modal==="confirmExit"&&<>
+              <div style={{fontSize:"26px",marginBottom:"6px"}}>✅</div>
+              <h3 style={{fontWeight:700,fontSize:"15px",marginBottom:"6px",color:"#1e293b"}}>편집을 종료할까요?</h3>
+              <p style={{fontSize:"12px",color:"#64748b",marginBottom:"14px"}}>현재 배치를 저장하고 종료하거나,<br/>버전으로 기록하고 종료할 수 있어요.</p>
+              <div style={{display:"flex",flexDirection:"column",gap:"8px"}}>
+                <button onClick={()=>{
+                  handleSaveToServer();
+                  setIsAdmin(false);setModal(null);
+                }} style={{...okBtnS,width:"100%"}}>☁️ 저장하고 종료</button>
+                <button onClick={()=>{
+                  setModal("saveVersion");
+                }} style={{...okBtnS,width:"100%",backgroundColor:"#10b981"}}>💾 버전 저장하고 종료</button>
+                <button onClick={()=>{
+                  setIsAdmin(false);setModal(null);
+                }} style={{...cxBtnS,width:"100%"}}>저장 없이 종료</button>
+              </div>
+            </>}
           </div>
         </div>
       )}
@@ -506,7 +513,7 @@ export default function SeatMapSystem() {
           <button onClick={()=>setModal("changePw")} style={addBtnS("#f8fafc","#64748b","#e2e8f0")}>🔑 비밀번호 변경</button>
         </div>}
 
-        <button onClick={()=>isAdmin?setIsAdmin(false):setModal("login")}
+        <button onClick={()=>isAdmin?setModal("confirmExit"):setModal("login")}
           style={{padding:"9px",backgroundColor:isAdmin?"#1e293b":"#2563eb",color:"#fff",border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"12px",fontWeight:700}}>
           {isAdmin?"✅ 편집 종료":"🔐 관리자 로그인"}
         </button>
